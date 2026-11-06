@@ -1,0 +1,3676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Auto-reload every 30 minutes so the catalog stays fresh. -->
+  <meta http-equiv="refresh" content="1800">
+  <title>Deal Finder — Latest Deals</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --card: #181b22;
+      --border: #262b35;
+      --text: #e8eaf0;
+      --muted: #8b93a5;
+      --green: #22c55e;
+      --green-dark: #123d24;
+      --accent: #3b82f6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header {
+      padding: 22px clamp(16px, 4vw, 40px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header-left {
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .site-nav { display: flex; align-items: center; gap: 16px; }
+    .site-nav a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      padding: 4px 2px;
+      border-bottom: 2px solid transparent;
+    }
+    .site-nav a:hover { color: var(--text); }
+    .site-nav a.active {
+      color: var(--text);
+      font-weight: 600;
+      border-bottom-color: var(--accent);
+    }
+    #searchBar,
+    #categoryFilter {
+      background: #171a21;
+      color: var(--text);
+      border: none;
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 0.9rem;
+      font-family: inherit;
+    }
+    #searchBar { max-width: 300px; width: 100%; }
+    #categoryFilter {
+      max-width: 180px;
+      width: 100%;
+      cursor: pointer;
+    }
+    #categoryFilter option { background: #171a21; color: var(--text); }
+    #searchBar::placeholder { color: var(--muted); }
+    #searchBar:focus,
+    #categoryFilter:focus {
+      outline: none;
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+    h1 { margin: 0; font-size: 1.45rem; }
+    .meta { color: var(--muted); font-size: 0.85rem; }
+    main { padding: clamp(16px, 4vw, 40px); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 20px;
+    }
+    .card {
+      position: relative;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+    .card:hover { transform: translateY(-3px); border-color: #3a4150; }
+    .img-wrap {
+      position: relative;
+      aspect-ratio: 1 / 1;            /* square image area */
+      background: #0b0d11;            /* dark backdrop for product shots */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .img-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      padding: 14px;
+    }
+    /* Empty div that replaces a broken <img> (see imgFallback below). */
+    .img-fallback { width: 100%; height: 100%; }
+    .badge-new {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: var(--green);
+      color: #06220f;
+      font-weight: 700;
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      padding: 3px 8px;
+      border-radius: 6px;
+      z-index: 1;
+    }
+    .badge-discount {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: var(--green-dark);
+      color: #7ee2a8;
+      border: 1px solid var(--green);
+      font-weight: 700;
+      font-size: 0.8rem;
+      padding: 3px 8px;
+      border-radius: 6px;
+      z-index: 1;
+    }
+    /* Category pill, tucked just below the discount badge. */
+    .badge-cat {
+      position: absolute;
+      top: 44px;
+      right: 10px;
+      background: #20242e;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      font-weight: 600;
+      font-size: 0.6rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 2px 6px;
+      border-radius: 6px;
+      z-index: 1;
+      white-space: nowrap;
+    }
+    .body {
+      padding: 14px 16px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex: 1;
+    }
+    .title {
+      font-size: 0.95rem;
+      line-height: 1.35;
+      font-weight: 600;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;          /* clamp title to 2 lines */
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      min-height: 2.6em;
+    }
+    .prices { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    .price { font-size: 1.35rem; font-weight: 800; }
+    .original {
+      color: var(--muted);
+      text-decoration: line-through;
+      font-size: 0.9rem;
+    }
+    .badge-atl {
+      background: var(--green-dark);
+      color: #7ee2a8;
+      border: 1px solid var(--green);
+      font-weight: 700;
+      font-size: 0.7rem;
+      letter-spacing: 0.04em;
+      padding: 2px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+    .history-block {
+      background: #0b0d11;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .history-block .sparkline svg {
+      display: block;
+      width: 100%;
+      height: 28px;
+    }
+    .history-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 0.75rem;
+    }
+    .history-meta .low { color: #7ee2a8; font-weight: 600; }
+    .promo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #0b0d11;
+      border: 1px dashed #3a4150;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .promo code {
+      font-family: ui-monospace, Consolas, "Cascadia Mono", monospace;
+      font-size: 0.85rem;
+      letter-spacing: 0.05em;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .promo button {
+      background: #20242e;
+      color: var(--text);
+      border: 1px solid #3a4150;
+      border-radius: 6px;
+      padding: 4px 10px;
+      cursor: pointer;
+      font-size: 0.75rem;
+    }
+    .promo button:hover { background: #2a2f3c; }
+    .cta {
+      margin-top: auto;
+      display: block;
+      text-align: center;
+      background: var(--accent);
+      color: #fff;
+      text-decoration: none;
+      font-weight: 700;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+    .cta:hover { filter: brightness(1.12); }
+    .empty {
+      color: var(--muted);
+      text-align: center;
+      padding: 64px 0;
+      font-size: 1.05rem;
+    }
+    footer {
+      color: var(--muted);
+      text-align: center;
+      padding: 20px;
+      font-size: 0.8rem;
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="header-left">
+    <h1>&#128293; Deals</h1>
+    <span class="meta">92 deals &middot; generated 2026-11-06T19:16:29+00:00</span>
+  </div>
+  <div class="header-right">
+    <nav class="site-nav">
+      <a href="index.html" class="active">Home</a>
+      <a href="coupons.html">Coupon Codes</a>
+    </nav>
+    <input type="text" id="searchBar" placeholder="Search deals...">
+    <select id="categoryFilter" aria-label="Filter by category">
+      <option value="all">All Categories</option>
+      <option value="Electronics">Electronics</option>
+      <option value="Gaming">Gaming</option>
+      <option value="Home &amp; Kitchen">Home &amp; Kitchen</option>
+      <option value="Fashion">Fashion</option>
+      <option value="Other">Other</option>
+    </select>
+  </div>
+</header>
+<main>
+  
+  <div class="grid">
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;97%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://images-na.ssl-images-amazon.com/images/S/mediaservice.woot.com/bb2c0d31-e109-417d-af57-3d48f03bcb74._AC_SR552,276_.jpg" alt="Generators, Portable Power Stations and Solar Panels - $23.99 to $899.99 Today" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Generators, Portable Power Stations and Solar Panels - $23.99 to $899.99 Today</div>
+        <div class="prices">
+          
+          <span class="price">$23.99</span>
+          
+          
+          <span class="original">$899.99</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,22.9 L1.9,8.9 L3.8,12.1 L5.8,9.7 L7.7,1.0 L9.6,2.8 L11.5,20.4 L13.5,10.8 L15.4,8.1 L17.3,24.6 L19.2,23.1 L21.2,21.1 L23.1,25.7 L25.0,25.8 L26.9,23.3 L28.8,17.6 L30.8,8.7 L32.7,11.1 L34.6,17.0 L36.5,17.2 L38.5,15.4 L40.4,3.9 L42.3,23.2 L44.2,8.8 L46.2,2.8 L48.1,13.0 L50.0,2.7 L51.9,9.1 L53.8,4.7 L55.8,11.7 L57.7,10.8 L59.6,19.9 L61.5,20.0 L63.5,27.0 L65.4,20.0 L67.3,2.0 L69.2,21.7 L71.2,3.3 L73.1,5.3 L75.0,9.9 L76.9,14.1 L78.8,3.1 L80.8,11.8 L82.7,10.0 L84.6,3.1 L86.5,13.6 L88.5,10.3 L90.4,5.6 L92.3,17.5 L94.2,19.6 L96.2,26.7 L98.1,26.2 L100.0,21.8" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$15.89</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://gottadeal.com/deal/479793" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;81%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://d.dlnws.com/64599/1792231761-imglululemon_yogo_rgb_blk-1658424320863.png?h=200&amp;amp;w=200" alt="lululemon We Made Too Much Event: Up to 84% off + free shipping" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">lululemon We Made Too Much Event: Up to 84% off + free shipping</div>
+        <div class="prices">
+          
+          <span class="price">$14.00</span>
+          
+          
+          <span class="original">$74.00</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,9.9 L1.9,5.8 L3.8,9.2 L5.8,13.8 L7.7,14.2 L9.6,1.4 L11.5,11.1 L13.5,6.6 L15.4,2.6 L17.3,5.9 L19.2,1.4 L21.2,15.8 L23.1,14.1 L25.0,10.5 L26.9,13.7 L28.8,9.3 L30.8,2.8 L32.7,26.6 L34.6,7.7 L36.5,5.3 L38.5,12.6 L40.4,23.6 L42.3,1.2 L44.2,13.6 L46.2,1.0 L48.1,15.5 L50.0,12.8 L51.9,2.1 L53.8,2.0 L55.8,11.5 L57.7,5.4 L59.6,13.6 L61.5,14.0 L63.5,15.0 L65.4,27.0 L67.3,9.7 L69.2,2.0 L71.2,7.5 L73.1,6.1 L75.0,15.8 L76.9,14.1 L78.8,14.7 L80.8,2.2 L82.7,10.0 L84.6,2.0 L86.5,11.8 L88.5,8.4 L90.4,9.7 L92.3,7.6 L94.2,4.9 L96.2,12.1 L98.1,14.5 L100.0,8.2" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$8.77</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.dealnews.com/lululemon-We-Made-Too-Much-Event-Up-to-84-off-free-shipping/22355415.html?iref=rss-hotness" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Fashion">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;80%</span>
+        
+        <span class="badge-cat">Fashion</span>
+        
+        <img src="https://d.dlnws.com/64599/1793917233-4000419931-847_tan_1.jpeg?h=250&amp;amp;w=250" alt="Weatherproof Men&#39;s Ultra Tech Jacket for $28 + free shipping" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Weatherproof Men&#39;s Ultra Tech Jacket for $28 + free shipping</div>
+        <div class="prices">
+          
+          <span class="price">$5.00</span>
+          
+          
+          <span class="original">$25.00</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,27.0 L1.9,1.9 L3.8,13.6 L5.8,6.8 L7.7,24.4 L9.6,7.7 L11.5,16.3 L13.5,19.4 L15.4,1.4 L17.3,4.7 L19.2,13.8 L21.2,26.5 L23.1,4.9 L25.0,18.7 L26.9,20.0 L28.8,9.4 L30.8,1.0 L32.7,10.7 L34.6,19.6 L36.5,15.6 L38.5,14.5 L40.4,15.4 L42.3,12.6 L44.2,10.8 L46.2,14.7 L48.1,25.1 L50.0,5.4 L51.9,12.2 L53.8,4.5 L55.8,12.2 L57.7,21.7 L59.6,4.2 L61.5,1.5 L63.5,21.2 L65.4,1.2 L67.3,21.0 L69.2,17.7 L71.2,11.5 L73.1,8.9 L75.0,8.7 L76.9,20.3 L78.8,5.6 L80.8,22.4 L82.7,4.2 L84.6,12.8 L86.5,6.3 L88.5,9.3 L90.4,24.9 L92.3,5.0 L94.2,10.5 L96.2,4.0 L98.1,9.1 L100.0,27.0" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$3.00</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.dealnews.com/Weatherproof-Mens-Ultra-Tech-Jacket-for-28-free-shipping/22351649.html?iref=rss-hotness" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;73%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://d.dlnws.com/64599/1793982504-61u-5qk684l-ac_sl1500.jpg?h=250&amp;amp;w=202" alt="Amazon Lightning Deals: Up to 78% off + free shipping w/ Prime" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Amazon Lightning Deals: Up to 78% off + free shipping w/ Prime</div>
+        <div class="prices">
+          
+          <span class="price">$47.00</span>
+          
+          
+          <span class="original">$175.00</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,10.8 L1.9,7.2 L3.8,11.3 L5.8,9.3 L7.7,7.5 L9.6,9.7 L11.5,13.1 L13.5,11.9 L15.4,5.6 L17.3,12.4 L19.2,2.8 L21.2,13.7 L23.1,27.0 L25.0,12.1 L26.9,1.9 L28.8,2.0 L30.8,12.7 L32.7,9.4 L34.6,1.6 L36.5,6.0 L38.5,12.5 L40.4,2.0 L42.3,12.0 L44.2,13.9 L46.2,2.1 L48.1,12.0 L50.0,8.2 L51.9,11.2 L53.8,8.9 L55.8,8.2 L57.7,1.0 L59.6,7.3 L61.5,8.9 L63.5,9.7 L65.4,7.0 L67.3,9.3 L69.2,4.5 L71.2,13.1 L73.1,21.2 L75.0,3.9 L76.9,8.3 L78.8,8.9 L80.8,13.8 L82.7,12.7 L84.6,2.2 L86.5,2.0 L88.5,3.5 L90.4,1.7 L92.3,3.6 L94.2,1.6 L96.2,25.4 L98.1,3.3 L100.0,13.8" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$26.20</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.dealnews.com/Amazon-Lightning-Deals-Up-to-78-off-free-shipping-w-Prime/22355764.html?iref=rss-hotness" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;62%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://d.dlnws.com/64599/1793953716-product-trimmed.jpg?h=212&amp;amp;w=250" alt="Woot Solar Power &amp; Generators Deals: Up to 62% off + free shipping w/ Prime" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Woot Solar Power &amp; Generators Deals: Up to 62% off + free shipping w/ Prime</div>
+        <div class="prices">
+          
+          <span class="price">$899.00</span>
+          
+          
+          <span class="original">$2338.00</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,4.7 L1.9,13.0 L3.8,13.6 L5.8,6.4 L7.7,1.7 L9.6,1.9 L11.5,10.3 L13.5,13.9 L15.4,6.3 L17.3,11.2 L19.2,4.3 L21.2,13.8 L23.1,12.4 L25.0,1.0 L26.9,3.9 L28.8,8.6 L30.8,4.9 L32.7,6.4 L34.6,9.1 L36.5,12.6 L38.5,11.5 L40.4,8.1 L42.3,3.5 L44.2,4.2 L46.2,8.0 L48.1,3.5 L50.0,27.0 L51.9,9.3 L53.8,12.5 L55.8,12.6 L57.7,12.2 L59.6,14.2 L61.5,7.0 L63.5,1.1 L65.4,7.5 L67.3,4.2 L69.2,12.8 L71.2,12.9 L73.1,2.8 L75.0,12.1 L76.9,1.2 L78.8,10.5 L80.8,11.5 L82.7,10.1 L84.6,3.4 L86.5,6.7 L88.5,2.7 L90.4,1.1 L92.3,5.0 L94.2,11.4 L96.2,1.1 L98.1,2.6 L100.0,9.0" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$508.85</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.dealnews.com/Woot-Solar-Power-Generators-Deals-Up-to-62-off-free-shipping-w-Prime/22355396.html?iref=rss-hotness" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Fashion">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;54%</span>
+        
+        <span class="badge-cat">Fashion</span>
+        
+        <img src="https://d.dlnws.com/64599/1793969141-fb48203c-0321-452d-a2cd-3ee8ca819883.webp?h=250&amp;amp;w=218" alt="Best Buy Early Black Friday Apple Watch Ultra 3 Deals: $250 off + free shipping" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Best Buy Early Black Friday Apple Watch Ultra 3 Deals: $250 off + free shipping</div>
+        <div class="prices">
+          
+          <span class="price">$250.00</span>
+          
+          
+          <span class="original">$549.00</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,1.0 L1.9,6.1 L3.8,10.3 L5.8,9.1 L7.7,9.8 L9.6,6.8 L11.5,4.5 L13.5,2.1 L15.4,3.3 L17.3,9.6 L19.2,11.4 L21.2,6.2 L23.1,27.0 L25.0,8.5 L26.9,13.5 L28.8,4.4 L30.8,21.7 L32.7,6.2 L34.6,1.3 L36.5,9.3 L38.5,13.6 L40.4,5.1 L42.3,10.0 L44.2,9.1 L46.2,11.6 L48.1,8.6 L50.0,9.7 L51.9,11.8 L53.8,9.0 L55.8,4.6 L57.7,3.7 L59.6,12.2 L61.5,1.5 L63.5,4.4 L65.4,3.9 L67.3,6.9 L69.2,12.9 L71.2,9.7 L73.1,9.3 L75.0,7.1 L76.9,9.7 L78.8,11.2 L80.8,10.2 L82.7,6.5 L84.6,12.0 L86.5,11.0 L88.5,8.8 L90.4,19.9 L92.3,5.3 L94.2,11.9 L96.2,10.1 L98.1,12.4 L100.0,14.0" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$139.44</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.dealnews.com/Best-Buy-Early-Black-Friday-Apple-Watch-Ultra-3-Deals-250-off-free-shipping/22355546.html?iref=rss-hotness" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Electronics">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;50%</span>
+        
+        <span class="badge-cat">Electronics</span>
+        
+        <img src="https://slickdeals.net/attachment/3/3/2/3/5/9/2/4/450x450/22234401.thumb" alt="3-pk Tughlax Rechargeable LED Flashlights w/ 10000 Lumens, LCD Display &amp; 5 Modes $15" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">3-pk Tughlax Rechargeable LED Flashlights w/ 10000 Lumens, LCD Display &amp; 5 Modes $15</div>
+        <div class="prices">
+          
+          <span class="price">$15.00</span>
+          
+          
+          <span class="original">$29.99</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,17.5 L1.9,7.4 L3.8,14.4 L5.8,8.5 L7.7,14.1 L9.6,8.3 L11.5,8.8 L13.5,7.4 L15.4,4.8 L17.3,13.3 L19.2,7.1 L21.2,5.7 L23.1,13.4 L25.0,5.4 L26.9,15.0 L28.8,17.7 L30.8,1.9 L32.7,1.0 L34.6,13.5 L36.5,9.7 L38.5,5.5 L40.4,5.7 L42.3,8.5 L44.2,7.2 L46.2,15.9 L48.1,8.7 L50.0,8.3 L51.9,8.5 L53.8,13.6 L55.8,1.5 L57.7,4.4 L59.6,6.5 L61.5,4.3 L63.5,3.2 L65.4,16.5 L67.3,17.7 L69.2,17.9 L71.2,3.0 L73.1,14.5 L75.0,4.7 L76.9,10.8 L78.8,18.5 L80.8,3.1 L82.7,3.1 L84.6,27.0 L86.5,13.3 L88.5,11.6 L90.4,5.5 L92.3,11.0 L94.2,4.1 L96.2,7.3 L98.1,3.4 L100.0,4.5" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$10.42</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://slickdeals.net/f/20263677-3-pk-tughlax-rechargeable-led-flashlights-w-10000-lumens-lcd-display-5-modes-15-fs-w-prime-or-on-orders-35-14-99?utm_source=rss&amp;utm_content=fp&amp;utm_medium=RSS2" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Electronics">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;50%</span>
+        
+        <span class="badge-cat">Electronics</span>
+        
+        <img src="https://slickdeals.net/attachment/3/1/1/9/6/7/1/6/450x450/22231461.thumb" alt="2-pk Flooyes Kids&#39; Rechargeable Video Walkie Talkies w/ HD Camera (Blue/Pink) $10" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">2-pk Flooyes Kids&#39; Rechargeable Video Walkie Talkies w/ HD Camera (Blue/Pink) $10</div>
+        <div class="prices">
+          
+          <span class="price">$10.00</span>
+          
+          
+          <span class="original">$19.99</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,7.7 L1.9,3.9 L3.8,6.6 L5.8,11.6 L7.7,4.6 L9.6,9.0 L11.5,1.0 L13.5,7.1 L15.4,2.7 L17.3,11.0 L19.2,13.7 L21.2,1.4 L23.1,13.6 L25.0,10.5 L26.9,2.7 L28.8,6.7 L30.8,11.1 L32.7,3.4 L34.6,3.9 L36.5,11.8 L38.5,10.7 L40.4,10.7 L42.3,13.0 L44.2,5.1 L46.2,27.0 L48.1,7.3 L50.0,8.5 L51.9,3.5 L53.8,11.6 L55.8,8.8 L57.7,8.3 L59.6,10.5 L61.5,8.6 L63.5,11.9 L65.4,8.5 L67.3,19.8 L69.2,2.7 L71.2,2.8 L73.1,11.1 L75.0,5.3 L76.9,8.5 L78.8,8.1 L80.8,4.6 L82.7,10.6 L84.6,8.1 L86.5,6.9 L88.5,12.2 L90.4,2.4 L92.3,21.3 L94.2,1.9 L96.2,4.3 L98.1,7.3 L100.0,8.4" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$5.55</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://slickdeals.net/f/20262516-2-pack-flooyes-kids-rechargeable-video-walkie-talkies-w-hd-camera-screen-blue-pink-9-99-free-shipping-w-prime-or-on-35?utm_source=rss&amp;utm_content=fp&amp;utm_medium=RSS2" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;50%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://d.dlnws.com/64599/1793983648-81l1mvstlil.jpg?h=250&amp;amp;w=250" alt="Natures&#39;s Butts 2027 Wall Calendar for $5 + free shipping w/ Prime" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Natures&#39;s Butts 2027 Wall Calendar for $5 + free shipping w/ Prime</div>
+        <div class="prices">
+          
+          <span class="price">$5.00</span>
+          
+          
+          <span class="original">$10.00</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,6.0 L1.9,5.8 L3.8,13.9 L5.8,10.3 L7.7,9.7 L9.6,1.3 L11.5,9.8 L13.5,1.0 L15.4,9.3 L17.3,12.0 L19.2,8.6 L21.2,1.5 L23.1,8.8 L25.0,21.9 L26.9,13.7 L28.8,6.6 L30.8,6.3 L32.7,5.2 L34.6,6.0 L36.5,27.0 L38.5,13.9 L40.4,6.5 L42.3,14.6 L44.2,8.5 L46.2,2.1 L48.1,20.6 L50.0,14.2 L51.9,8.8 L53.8,8.5 L55.8,11.3 L57.7,6.8 L59.6,10.0 L61.5,10.3 L63.5,12.5 L65.4,14.8 L67.3,7.5 L69.2,10.6 L71.2,6.0 L73.1,8.4 L75.0,3.0 L76.9,8.3 L78.8,9.7 L80.8,10.4 L82.7,14.4 L84.6,4.8 L86.5,12.0 L88.5,9.3 L90.4,4.8 L92.3,11.0 L94.2,3.1 L96.2,5.8 L98.1,12.0 L100.0,9.4" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$3.01</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.dealnews.com/Naturess-Butts-2027-Wall-Calendar-for-5-free-shipping-w-Prime/22355806.html?iref=rss-hotness" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;41%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://d.dlnws.com/64599/1793953918-product-trimmed.jpg?h=126&amp;amp;w=250" alt="ASICS, adidas, Altra, &amp; Saucony Deals at Woot for Up to 47% off, from $40 + free shipping w/ Prime" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">ASICS, adidas, Altra, &amp; Saucony Deals at Woot for Up to 47% off, from $40 + free shipping w/ Prime</div>
+        <div class="prices">
+          
+          <span class="price">$47.00</span>
+          
+          
+          <span class="original">$80.00</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,14.7 L1.9,4.6 L3.8,9.0 L5.8,3.3 L7.7,4.4 L9.6,13.9 L11.5,14.3 L13.5,17.2 L15.4,3.7 L17.3,6.8 L19.2,27.0 L21.2,9.0 L23.1,3.9 L25.0,1.6 L26.9,2.4 L28.8,17.0 L30.8,13.2 L32.7,14.7 L34.6,14.2 L36.5,14.2 L38.5,7.7 L40.4,5.4 L42.3,14.4 L44.2,14.4 L46.2,6.1 L48.1,1.4 L50.0,8.4 L51.9,15.5 L53.8,7.1 L55.8,2.1 L57.7,5.8 L59.6,3.2 L61.5,3.2 L63.5,14.1 L65.4,6.3 L67.3,13.5 L69.2,13.9 L71.2,11.0 L73.1,2.2 L75.0,17.2 L76.9,4.2 L78.8,15.2 L80.8,1.0 L82.7,6.8 L84.6,15.7 L86.5,17.1 L88.5,16.3 L90.4,1.7 L92.3,8.2 L94.2,9.8 L96.2,12.8 L98.1,3.0 L100.0,6.3" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$26.19</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.dealnews.com/ASICS-adidas-Altra-Saucony-Deals-at-Woot-for-Up-to-47-off-from-40-free-shipping-w-Prime/22355400.html?iref=rss-hotness" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;41%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://slickdeals.net/attachment/1/1/7/1/5/2/7/450x450/22239564.thumb" alt="Magic: The Gathering, Avatar: The Last Airbender Beginner Box $17.70" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Magic: The Gathering, Avatar: The Last Airbender Beginner Box $17.70</div>
+        <div class="prices">
+          
+          <span class="price">$17.70</span>
+          
+          
+          <span class="original">$29.99</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,1.0 L1.9,12.9 L3.8,1.3 L5.8,1.2 L7.7,14.4 L9.6,5.1 L11.5,14.4 L13.5,13.4 L15.4,5.0 L17.3,23.1 L19.2,4.5 L21.2,20.0 L23.1,22.6 L25.0,16.8 L26.9,21.1 L28.8,11.1 L30.8,23.6 L32.7,27.0 L34.6,20.4 L36.5,1.2 L38.5,12.4 L40.4,25.8 L42.3,18.2 L44.2,10.7 L46.2,21.4 L48.1,13.7 L50.0,11.2 L51.9,4.1 L53.8,15.8 L55.8,7.0 L57.7,3.5 L59.6,1.3 L61.5,4.4 L63.5,11.1 L65.4,24.7 L67.3,17.3 L69.2,5.4 L71.2,19.3 L73.1,16.7 L75.0,19.5 L76.9,6.7 L78.8,8.7 L80.8,20.6 L82.7,14.6 L84.6,22.2 L86.5,16.5 L88.5,24.5 L90.4,25.4 L92.3,12.4 L94.2,22.7 L96.2,24.1 L98.1,4.9 L100.0,14.2" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$9.81</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://slickdeals.net/f/20265759-ac-17-70-magic-the-gathering-avatar-the-last-airbender-beginner-trading-card-box-at-amazon?utm_source=rss&amp;utm_content=fp&amp;utm_medium=RSS2" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;38%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://slickdeals.net/attachment/4/0/4/0/3/4/4/450x450/22236885.thumb" alt="Sel. Accts: Dr. Scholl&#39;s Men&#39;s Energizing Comfort Massaging Gel Insoles (8-14) $8 w/ S&amp;S" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Sel. Accts: Dr. Scholl&#39;s Men&#39;s Energizing Comfort Massaging Gel Insoles (8-14) $8 w/ S&amp;S</div>
+        <div class="prices">
+          
+          <span class="price">$8.00</span>
+          
+          
+          <span class="original">$12.97</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,5.5 L1.9,11.3 L3.8,7.7 L5.8,4.0 L7.7,10.1 L9.6,13.2 L11.5,7.3 L13.5,1.6 L15.4,10.6 L17.3,9.2 L19.2,8.5 L21.2,13.9 L23.1,23.3 L25.0,6.0 L26.9,6.4 L28.8,10.2 L30.8,7.5 L32.7,13.9 L34.6,1.2 L36.5,9.5 L38.5,6.5 L40.4,6.0 L42.3,5.6 L44.2,4.6 L46.2,11.8 L48.1,8.8 L50.0,25.4 L51.9,7.3 L53.8,27.0 L55.8,7.7 L57.7,13.3 L59.6,5.8 L61.5,4.0 L63.5,13.9 L65.4,2.5 L67.3,12.8 L69.2,7.8 L71.2,2.6 L73.1,11.3 L75.0,6.6 L76.9,2.5 L78.8,12.0 L80.8,4.3 L82.7,4.1 L84.6,9.0 L86.5,1.8 L88.5,1.0 L90.4,5.5 L92.3,13.4 L94.2,13.5 L96.2,10.4 L98.1,6.9 L100.0,5.0" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$4.49</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://slickdeals.net/f/20264745-select-accounts-dr-scholl-s-men-s-energizing-comfort-massaging-gel-insoles-size-8-14-7-78-w-s-s-free-shipping-w-prime-or-on-35?utm_source=rss&amp;utm_content=fp&amp;utm_medium=RSS2" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Home &amp; Kitchen">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;38%</span>
+        
+        <span class="badge-cat">Home &amp; Kitchen</span>
+        
+        <img src="https://slickdeals.net/attachment/3/6/0/4/2/3/2/7/450x450/22241571.thumb" alt="3-pk 10-Compartment CRAFTSMAN Storage Organizer w/ Secure Latch $18" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">3-pk 10-Compartment CRAFTSMAN Storage Organizer w/ Secure Latch $18</div>
+        <div class="prices">
+          
+          <span class="price">$17.98</span>
+          
+          
+          <span class="original">$28.99</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,11.5 L1.9,3.5 L3.8,6.7 L5.8,11.2 L7.7,14.4 L9.6,9.7 L11.5,14.5 L13.5,15.0 L15.4,14.8 L17.3,10.4 L19.2,8.4 L21.2,4.3 L23.1,2.7 L25.0,12.0 L26.9,27.0 L28.8,5.7 L30.8,1.0 L32.7,1.8 L34.6,5.5 L36.5,11.3 L38.5,7.8 L40.4,1.0 L42.3,10.4 L44.2,7.7 L46.2,2.0 L48.1,4.5 L50.0,11.1 L51.9,8.6 L53.8,7.4 L55.8,5.7 L57.7,1.1 L59.6,11.4 L61.5,13.3 L63.5,12.8 L65.4,2.7 L67.3,7.1 L69.2,5.9 L71.2,6.5 L73.1,3.3 L75.0,5.1 L76.9,9.4 L78.8,4.2 L80.8,7.1 L82.7,2.3 L84.6,3.9 L86.5,11.1 L88.5,5.5 L90.4,4.4 L92.3,1.7 L94.2,10.5 L96.2,1.8 L98.1,3.3 L100.0,6.2" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$10.85</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0BBN9W3YR?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;33%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://d.dlnws.com/64599/1712968361-dn-image-7823946.jpg?h=250&amp;amp;w=250" alt="HP 290 G9 Pro  i7 Tower Desktop for $540 + free shipping" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">HP 290 G9 Pro  i7 Tower Desktop for $540 + free shipping</div>
+        <div class="prices">
+          
+          <span class="price">$360.00</span>
+          
+          
+          <span class="original">$540.00</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,17.9 L1.9,1.9 L3.8,4.1 L5.8,8.2 L7.7,17.3 L9.6,3.3 L11.5,16.6 L13.5,6.4 L15.4,6.8 L17.3,13.6 L19.2,14.4 L21.2,2.0 L23.1,8.5 L25.0,17.0 L26.9,2.7 L28.8,4.3 L30.8,5.1 L32.7,27.0 L34.6,1.0 L36.5,10.6 L38.5,13.7 L40.4,5.8 L42.3,11.4 L44.2,1.0 L46.2,8.1 L48.1,18.7 L50.0,2.2 L51.9,13.3 L53.8,3.8 L55.8,5.6 L57.7,9.6 L59.6,2.1 L61.5,4.3 L63.5,11.5 L65.4,9.9 L67.3,18.1 L69.2,14.3 L71.2,13.8 L73.1,9.0 L75.0,1.3 L76.9,7.5 L78.8,5.2 L80.8,1.0 L82.7,13.0 L84.6,14.4 L86.5,3.9 L88.5,10.6 L90.4,16.5 L92.3,4.8 L94.2,17.4 L96.2,1.7 L98.1,16.9 L100.0,11.8" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$205.04</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.dealnews.com/products/HP/HP-290-G9-Pro-Tower-Desktop-i7-12700-K-32-GB-RAM-1-TB-NVMe-SSD-USB-C-HDMI-VGA-Wi-Fi-Bluetooth/469077.html?iref=rss-hotness" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;32%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://slickdeals.net/attachment/1/6/7/9/8/1/2/450x450/22246992.thumb" alt="44-Ct Breathe Right Extra Strength Nasal Strips (Clear) $8.60 w/ S&amp;S" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">44-Ct Breathe Right Extra Strength Nasal Strips (Clear) $8.60 w/ S&amp;S</div>
+        <div class="prices">
+          
+          <span class="price">$14.32</span>
+          
+          
+          <span class="original">$20.99</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,9.8 L1.9,5.7 L3.8,9.8 L5.8,3.3 L7.7,5.1 L9.6,4.2 L11.5,8.3 L13.5,2.6 L15.4,8.4 L17.3,10.6 L19.2,3.2 L21.2,9.6 L23.1,11.8 L25.0,9.4 L26.9,12.7 L28.8,10.8 L30.8,7.1 L32.7,2.1 L34.6,8.5 L36.5,12.4 L38.5,9.1 L40.4,27.0 L42.3,13.6 L44.2,1.2 L46.2,11.2 L48.1,2.2 L50.0,5.0 L51.9,12.4 L53.8,6.8 L55.8,5.8 L57.7,5.9 L59.6,13.1 L61.5,14.2 L63.5,2.1 L65.4,9.7 L67.3,1.1 L69.2,1.0 L71.2,2.9 L73.1,7.0 L75.0,13.3 L76.9,2.3 L78.8,9.2 L80.8,14.3 L82.7,6.5 L84.6,4.2 L86.5,2.1 L88.5,1.3 L90.4,6.7 L92.3,9.8 L94.2,14.3 L96.2,5.9 L98.1,8.6 L100.0,12.9" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$8.22</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B07FHM225F?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Gaming">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;31%</span>
+        
+        <span class="badge-cat">Gaming</span>
+        
+        <img src="https://d.dlnws.com/64599/1793968872-7500536.webp?h=250&amp;amp;w=250" alt="LEGO Early Black Friday Toy Deals at Kohl&#39;s: 40% off everything + free shipping w/ $25" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">LEGO Early Black Friday Toy Deals at Kohl&#39;s: 40% off everything + free shipping w/ $25</div>
+        <div class="prices">
+          
+          <span class="price">$25.00</span>
+          
+          
+          <span class="original">$36.00</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,4.9 L1.9,2.6 L3.8,1.5 L5.8,8.3 L7.7,14.0 L9.6,13.6 L11.5,2.4 L13.5,9.6 L15.4,15.3 L17.3,7.6 L19.2,2.6 L21.2,15.8 L23.1,11.8 L25.0,12.0 L26.9,27.0 L28.8,11.5 L30.8,1.3 L32.7,9.9 L34.6,14.6 L36.5,5.4 L38.5,6.9 L40.4,11.8 L42.3,16.4 L44.2,12.8 L46.2,7.2 L48.1,4.0 L50.0,14.9 L51.9,5.3 L53.8,13.7 L55.8,1.0 L57.7,4.1 L59.6,1.3 L61.5,14.8 L63.5,16.4 L65.4,14.6 L67.3,5.6 L69.2,15.8 L71.2,23.6 L73.1,4.6 L75.0,14.5 L76.9,13.8 L78.8,15.9 L80.8,11.7 L82.7,11.6 L84.6,6.9 L86.5,3.2 L88.5,5.7 L90.4,15.0 L92.3,13.2 L94.2,15.2 L96.2,8.0 L98.1,7.6 L100.0,4.5" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$16.03</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.dealnews.com/LEGO-Early-Black-Friday-Toy-Deals-at-Kohls-40-off-everything-free-shipping-w-25/22355544.html?iref=rss-hotness" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Electronics">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;28%</span>
+        
+        <span class="badge-cat">Electronics</span>
+        
+        <img src="https://www.techbargains.com/imagery/deals/267896.1793984651.fit_lim.size_125x125.jpg" alt="Jogrytece 4-in-2 USB-C Mulit Charging Cable $4.75" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Jogrytece 4-in-2 USB-C Mulit Charging Cable $4.75</div>
+        <div class="prices">
+          
+          <span class="price">$4.75</span>
+          
+          
+          <span class="original">$6.64</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,17.0 L1.9,6.3 L3.8,23.0 L5.8,8.3 L7.7,27.0 L9.6,11.4 L11.5,3.6 L13.5,10.4 L15.4,15.1 L17.3,13.2 L19.2,13.2 L21.2,8.7 L23.1,21.7 L25.0,10.6 L26.9,16.8 L28.8,23.6 L30.8,22.1 L32.7,17.4 L34.6,22.9 L36.5,25.7 L38.5,9.9 L40.4,21.3 L42.3,12.1 L44.2,6.7 L46.2,1.6 L48.1,26.4 L50.0,9.7 L51.9,24.4 L53.8,24.6 L55.8,14.4 L57.7,5.9 L59.6,25.7 L61.5,10.8 L63.5,1.0 L65.4,24.2 L67.3,15.7 L69.2,6.3 L71.2,19.8 L73.1,4.0 L75.0,3.6 L76.9,1.9 L78.8,4.4 L80.8,25.1 L82.7,19.1 L84.6,3.3 L86.5,3.8 L88.5,6.7 L90.4,4.0 L92.3,15.1 L94.2,18.3 L96.2,2.7 L98.1,12.7 L100.0,15.7" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$2.93</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0H32MM5RV?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Fashion">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;28%</span>
+        
+        <span class="badge-cat">Fashion</span>
+        
+        <img src="https://cdn.shopsale.com/attachments/attachments-1793855272930-474418102.png" alt="Men&#39;s Christmas Tree Jacket Coat" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Men&#39;s Christmas Tree Jacket Coat</div>
+        <div class="prices">
+          
+          <span class="price">$39.50</span>
+          
+          
+          <span class="original">$55.22</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,1.1 L1.9,12.2 L3.8,7.4 L5.8,9.6 L7.7,8.5 L9.6,3.9 L11.5,1.7 L13.5,7.1 L15.4,2.4 L17.3,7.9 L19.2,5.3 L21.2,1.7 L23.1,11.1 L25.0,13.2 L26.9,1.6 L28.8,13.1 L30.8,7.9 L32.7,13.5 L34.6,6.8 L36.5,6.7 L38.5,1.0 L40.4,7.3 L42.3,7.0 L44.2,12.2 L46.2,27.0 L48.1,6.1 L50.0,1.2 L51.9,13.7 L53.8,10.8 L55.8,11.7 L57.7,7.0 L59.6,12.5 L61.5,7.5 L63.5,4.8 L65.4,12.7 L67.3,4.8 L69.2,26.4 L71.2,20.2 L73.1,1.0 L75.0,7.2 L76.9,7.1 L78.8,4.9 L80.8,5.1 L82.7,7.4 L84.6,7.4 L86.5,7.9 L88.5,6.5 L90.4,11.3 L92.3,4.5 L94.2,10.8 L96.2,10.1 L98.1,6.4 L100.0,10.8" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$22.19</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://shopsale.com/products/mens-christmas-tree-jacket-coat" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Fashion">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;28%</span>
+        
+        <span class="badge-cat">Fashion</span>
+        
+        <img src="https://target.scene7.com/is/image/Target/GUEST_574954b1-cbe0-48fb-9179-15b86a456c12" alt="Target Early Black Friday Deal: 40% to 80% off on 1,000s of Men&#39;s Clothing Items" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Target Early Black Friday Deal: 40% to 80% off on 1,000s of Men&#39;s Clothing Items</div>
+        <div class="prices">
+          
+          <span class="price">$291.26</span>
+          
+          
+          <span class="original">$406.13</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,3.3 L1.9,1.9 L3.8,3.6 L5.8,2.5 L7.7,9.6 L9.6,3.3 L11.5,3.3 L13.5,1.0 L15.4,1.0 L17.3,2.7 L19.2,9.8 L21.2,11.9 L23.1,13.5 L25.0,3.1 L26.9,11.5 L28.8,11.1 L30.8,7.9 L32.7,5.5 L34.6,1.8 L36.5,6.2 L38.5,12.4 L40.4,27.0 L42.3,4.3 L44.2,12.2 L46.2,9.6 L48.1,8.3 L50.0,6.2 L51.9,1.3 L53.8,18.6 L55.8,4.9 L57.7,7.0 L59.6,4.9 L61.5,1.7 L63.5,11.7 L65.4,10.4 L67.3,6.3 L69.2,8.7 L71.2,3.8 L73.1,6.0 L75.0,9.7 L76.9,10.2 L78.8,7.6 L80.8,13.8 L82.7,12.0 L84.6,8.2 L86.5,8.8 L88.5,10.0 L90.4,3.0 L92.3,9.5 L94.2,26.8 L96.2,1.5 L98.1,8.9 L100.0,3.0" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$160.55</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://gottadeal.com/deal/479785" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Fashion">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;28%</span>
+        
+        <span class="badge-cat">Fashion</span>
+        
+        <img src="https://d.dlnws.com/64599/1793446593-product-trimmed.png?h=155&amp;amp;w=250" alt="adidas Terrex Rockadia Hiking Shoes for $32 + free shipping" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">adidas Terrex Rockadia Hiking Shoes for $32 + free shipping</div>
+        <div class="prices">
+          
+          <span class="price">$32.00</span>
+          
+          
+          <span class="original">$44.58</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,2.0 L1.9,5.2 L3.8,10.8 L5.8,7.0 L7.7,7.3 L9.6,5.7 L11.5,3.0 L13.5,9.5 L15.4,3.4 L17.3,12.3 L19.2,12.9 L21.2,5.0 L23.1,9.5 L25.0,2.5 L26.9,7.1 L28.8,8.6 L30.8,6.1 L32.7,12.8 L34.6,5.7 L36.5,6.3 L38.5,4.0 L40.4,5.8 L42.3,4.1 L44.2,1.0 L46.2,4.9 L48.1,2.4 L50.0,1.7 L51.9,7.5 L53.8,1.8 L55.8,13.5 L57.7,6.4 L59.6,9.2 L61.5,10.6 L63.5,2.6 L65.4,10.0 L67.3,2.8 L69.2,13.9 L71.2,13.9 L73.1,10.3 L75.0,3.5 L76.9,24.4 L78.8,7.0 L80.8,13.9 L82.7,5.8 L84.6,14.4 L86.5,8.8 L88.5,3.7 L90.4,8.1 L92.3,27.0 L94.2,10.9 L96.2,11.3 L98.1,10.8 L100.0,2.4" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$18.22</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.dealnews.com/adidas-Terrex-Rockadia-Hiking-Shoes-for-32-free-shipping/22355468.html?iref=rss-hotness" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Fashion">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;28%</span>
+        
+        <span class="badge-cat">Fashion</span>
+        
+        <img src="https://cdn.ihotoffers.com/attachments/attachments-1793984454391-467045475.png" alt="Sperry Women&#39;s 2 Eye Boat Shoes" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Sperry Women&#39;s 2 Eye Boat Shoes</div>
+        <div class="prices">
+          
+          <span class="price">$109.99</span>
+          
+          
+          <span class="original">$152.96</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,6.7 L1.9,2.3 L3.8,8.2 L5.8,9.5 L7.7,13.8 L9.6,12.8 L11.5,1.0 L13.5,1.7 L15.4,12.8 L17.3,14.2 L19.2,11.9 L21.2,9.6 L23.1,7.9 L25.0,14.3 L26.9,6.0 L28.8,10.5 L30.8,8.6 L32.7,4.0 L34.6,14.4 L36.5,10.8 L38.5,7.3 L40.4,4.8 L42.3,7.2 L44.2,27.0 L46.2,14.3 L48.1,7.6 L50.0,8.1 L51.9,1.4 L53.8,12.8 L55.8,13.3 L57.7,5.8 L59.6,6.3 L61.5,2.5 L63.5,1.7 L65.4,4.0 L67.3,1.8 L69.2,7.3 L71.2,5.9 L73.1,5.8 L75.0,7.0 L76.9,3.3 L78.8,12.7 L80.8,11.7 L82.7,9.3 L84.6,3.4 L86.5,1.7 L88.5,3.0 L90.4,4.1 L92.3,13.6 L94.2,8.7 L96.2,11.2 L98.1,4.2 L100.0,1.8" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$60.52</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://ihotoffers.com/offer/sperry-womens-2-eye-boat-shoes" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;28%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://cdn.ihotoffers.com/attachments/attachments-1793984396577-850892526.png" alt="Columbia Men&#39;s Whirlibird Cuffed Beanie" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Columbia Men&#39;s Whirlibird Cuffed Beanie</div>
+        <div class="prices">
+          
+          <span class="price">$20.00</span>
+          
+          
+          <span class="original">$27.82</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,1.6 L1.9,4.3 L3.8,13.3 L5.8,9.2 L7.7,12.4 L9.6,12.4 L11.5,1.4 L13.5,1.1 L15.4,10.4 L17.3,12.0 L19.2,7.9 L21.2,4.3 L23.1,12.1 L25.0,13.4 L26.9,4.4 L28.8,12.0 L30.8,4.5 L32.7,4.4 L34.6,2.2 L36.5,7.9 L38.5,6.1 L40.4,4.4 L42.3,3.9 L44.2,3.3 L46.2,8.1 L48.1,7.5 L50.0,2.1 L51.9,1.0 L53.8,8.0 L55.8,6.1 L57.7,1.2 L59.6,4.4 L61.5,8.9 L63.5,2.3 L65.4,4.1 L67.3,11.6 L69.2,6.7 L71.2,11.0 L73.1,7.6 L75.0,1.0 L76.9,1.3 L78.8,8.9 L80.8,26.9 L82.7,24.0 L84.6,8.6 L86.5,4.1 L88.5,11.7 L90.4,11.5 L92.3,27.0 L94.2,6.5 L96.2,13.5 L98.1,2.5 L100.0,9.1" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$11.68</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://ihotoffers.com/offer/columbia-mens-whirlibird-cuffed-beanie" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;28%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <div class="img-fallback"></div>
+        
+      </div>
+      <div class="body">
+        <div class="title">Toysmith Tech Gear Multi Voice Changer (6.5-Inch Various Colors)</div>
+        <div class="prices">
+          
+          <span class="price">$108.04</span>
+          
+          
+          <span class="original">$149.95</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,10.1 L1.9,2.6 L3.8,11.5 L5.8,8.7 L7.7,9.9 L9.6,16.3 L11.5,16.9 L13.5,8.4 L15.4,11.5 L17.3,6.0 L19.2,11.5 L21.2,18.6 L23.1,4.7 L25.0,5.7 L26.9,11.6 L28.8,6.0 L30.8,6.0 L32.7,8.0 L34.6,17.1 L36.5,6.4 L38.5,18.2 L40.4,9.1 L42.3,15.9 L44.2,14.2 L46.2,5.0 L48.1,4.6 L50.0,17.7 L51.9,7.6 L53.8,16.0 L55.8,17.4 L57.7,9.6 L59.6,15.2 L61.5,3.3 L63.5,15.5 L65.4,15.6 L67.3,4.8 L69.2,16.9 L71.2,12.6 L73.1,15.9 L75.0,10.7 L76.9,1.7 L78.8,1.6 L80.8,4.3 L82.7,14.3 L84.6,9.0 L86.5,27.0 L88.5,5.3 L90.4,10.9 L92.3,3.2 L94.2,4.1 L96.2,1.0 L98.1,6.3 L100.0,9.8" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$65.75</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B000FK3WDC?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;28%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://www.techbargains.com/imagery/deals/273866.1793989419.fit_lim.size_125x125.jpg" alt="Bruno Marc Men&amp;#039;s Cushionix Mesh Casual Walking Shoe (Various Sizes) $22.49" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Bruno Marc Men&amp;#039;s Cushionix Mesh Casual Walking Shoe (Various Sizes) $22.49</div>
+        <div class="prices">
+          
+          <span class="price">$22.49</span>
+          
+          
+          <span class="original">$31.21</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,9.1 L1.9,9.5 L3.8,3.8 L5.8,9.9 L7.7,1.3 L9.6,10.5 L11.5,4.8 L13.5,7.9 L15.4,10.6 L17.3,5.0 L19.2,11.3 L21.2,7.1 L23.1,10.7 L25.0,11.8 L26.9,10.6 L28.8,13.4 L30.8,1.8 L32.7,6.2 L34.6,23.4 L36.5,2.5 L38.5,7.0 L40.4,27.0 L42.3,11.8 L44.2,7.2 L46.2,13.8 L48.1,11.7 L50.0,11.8 L51.9,12.2 L53.8,2.6 L55.8,4.9 L57.7,5.1 L59.6,6.3 L61.5,10.6 L63.5,10.3 L65.4,4.6 L67.3,4.8 L69.2,11.9 L71.2,7.7 L73.1,4.6 L75.0,2.4 L76.9,13.5 L78.8,1.0 L80.8,2.3 L82.7,8.6 L84.6,8.1 L86.5,7.3 L88.5,13.7 L90.4,12.7 L92.3,13.0 L94.2,3.9 L96.2,14.0 L98.1,5.0 L100.0,12.3" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$12.71</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0GMGP4488?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;28%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://slickdeals.net/attachment/1/3/8/5/0/5/5/450x450/22235985.thumb" alt="Msuhettu Exhaust Hanger Removal Tool Pliers $7" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Msuhettu Exhaust Hanger Removal Tool Pliers $7</div>
+        <div class="prices">
+          
+          <span class="price">$7.00</span>
+          
+          
+          <span class="original">$9.67</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,10.8 L1.9,1.6 L3.8,19.0 L5.8,7.8 L7.7,15.7 L9.6,14.8 L11.5,14.5 L13.5,13.9 L15.4,6.0 L17.3,16.3 L19.2,11.9 L21.2,13.8 L23.1,6.0 L25.0,17.9 L26.9,4.8 L28.8,15.8 L30.8,8.4 L32.7,19.0 L34.6,10.8 L36.5,12.3 L38.5,8.5 L40.4,10.2 L42.3,17.3 L44.2,3.8 L46.2,10.1 L48.1,15.0 L50.0,18.3 L51.9,15.6 L53.8,13.6 L55.8,10.0 L57.7,18.2 L59.6,1.0 L61.5,6.2 L63.5,15.7 L65.4,1.5 L67.3,8.2 L69.2,9.0 L71.2,9.8 L73.1,16.0 L75.0,16.2 L76.9,4.7 L78.8,8.3 L80.8,7.0 L82.7,17.1 L84.6,17.8 L86.5,27.0 L88.5,11.1 L90.4,2.6 L92.3,15.7 L94.2,10.3 L96.2,6.0 L98.1,14.4 L100.0,16.3" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$4.55</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://slickdeals.net/f/20264367-6-99-fs-prime-exhaust-hanger-removal-tool-heavy-duty-pliers-for-rubber-hangers?utm_source=rss&amp;utm_content=fp&amp;utm_medium=RSS2" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;28%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://d.dlnws.com/64599/1793092751-macys-logo.png?h=72&amp;amp;w=250" alt="Macy&#39;s One-Day Black Friday Sale: Up to 80% off + free shipping w/ $39" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Macy&#39;s One-Day Black Friday Sale: Up to 80% off + free shipping w/ $39</div>
+        <div class="prices">
+          
+          <span class="price">$39.00</span>
+          
+          
+          <span class="original">$53.85</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,1.8 L1.9,2.1 L3.8,8.8 L5.8,5.8 L7.7,6.2 L9.6,15.1 L11.5,13.3 L13.5,11.4 L15.4,15.9 L17.3,22.7 L19.2,9.4 L21.2,11.5 L23.1,5.8 L25.0,1.5 L26.9,4.8 L28.8,8.9 L30.8,1.1 L32.7,15.0 L34.6,3.0 L36.5,10.8 L38.5,2.7 L40.4,5.5 L42.3,8.7 L44.2,4.5 L46.2,12.1 L48.1,5.2 L50.0,6.8 L51.9,9.8 L53.8,13.5 L55.8,7.7 L57.7,10.3 L59.6,9.4 L61.5,12.2 L63.5,14.1 L65.4,12.0 L67.3,12.7 L69.2,12.2 L71.2,16.5 L73.1,12.6 L75.0,12.2 L76.9,16.4 L78.8,2.9 L80.8,13.3 L82.7,12.8 L84.6,7.5 L86.5,27.0 L88.5,11.8 L90.4,13.7 L92.3,7.4 L94.2,16.6 L96.2,13.3 L98.1,1.0 L100.0,12.3" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$25.61</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.dealnews.com/Macys-One-Day-Black-Friday-Sale-Up-to-80-off-free-shipping-w-39/22355511.html?iref=rss-hotness" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;28%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <div class="img-fallback"></div>
+        
+      </div>
+      <div class="body">
+        <div class="title">November Clearance Event: Save up to 85% off on Over 1,250 Hot Deals at Walmart</div>
+        <div class="prices">
+          
+          <span class="price">$264.23</span>
+          
+          
+          <span class="original">$364.90</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,2.5 L1.9,1.4 L3.8,11.6 L5.8,12.3 L7.7,7.0 L9.6,4.8 L11.5,15.0 L13.5,10.1 L15.4,9.4 L17.3,13.7 L19.2,7.5 L21.2,13.4 L23.1,3.2 L25.0,3.2 L26.9,6.6 L28.8,10.4 L30.8,1.2 L32.7,1.9 L34.6,6.2 L36.5,13.6 L38.5,5.3 L40.4,8.9 L42.3,8.0 L44.2,9.0 L46.2,15.0 L48.1,1.6 L50.0,12.6 L51.9,1.5 L53.8,6.2 L55.8,10.7 L57.7,3.5 L59.6,9.3 L61.5,8.5 L63.5,14.5 L65.4,6.1 L67.3,3.4 L69.2,20.9 L71.2,12.5 L73.1,4.4 L75.0,10.5 L76.9,27.0 L78.8,1.0 L80.8,7.7 L82.7,3.3 L84.6,14.0 L86.5,4.2 L88.5,15.0 L90.4,7.7 L92.3,7.9 L94.2,12.6 L96.2,5.8 L98.1,4.4 L100.0,6.6" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$159.77</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://gottadeal.com/deal/479789" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;27%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://www.techbargains.com/imagery/deals/230628.1793990714.fit_lim.size_125x125.jpg" alt="Stove Top Savory Herbs Stuffing Mix (6oz Box) $0.85" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Stove Top Savory Herbs Stuffing Mix (6oz Box) $0.85</div>
+        <div class="prices">
+          
+          <span class="price">$0.85</span>
+          
+          
+          <span class="original">$1.17</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,12.1 L1.9,13.2 L3.8,14.8 L5.8,14.3 L7.7,15.4 L9.6,6.0 L11.5,5.4 L13.5,4.3 L15.4,14.8 L17.3,11.5 L19.2,2.7 L21.2,6.0 L23.1,13.2 L25.0,14.8 L26.9,14.3 L28.8,27.0 L30.8,14.8 L32.7,12.6 L34.6,14.8 L36.5,1.0 L38.5,7.1 L40.4,9.9 L42.3,14.3 L44.2,2.7 L46.2,11.0 L48.1,14.8 L50.0,11.0 L51.9,3.8 L53.8,5.4 L55.8,1.6 L57.7,3.8 L59.6,2.1 L61.5,1.6 L63.5,13.2 L65.4,9.9 L67.3,5.4 L69.2,12.1 L71.2,11.0 L73.1,3.2 L75.0,2.1 L76.9,5.4 L78.8,4.3 L80.8,9.3 L82.7,8.2 L84.6,5.4 L86.5,11.5 L88.5,3.2 L90.4,11.0 L92.3,4.9 L94.2,10.4 L96.2,3.8 L98.1,12.1 L100.0,7.1" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$0.51</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B00NAXUB3U?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Electronics">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;27%</span>
+        
+        <span class="badge-cat">Electronics</span>
+        
+        <img src="https://www.techbargains.com/imagery/deals/271616.1793989009.fit_lim.size_125x125.png" alt="Talix 3.3ft 240W PD3.2 EPR USB-C to USB-C Charging Cable $6.40" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Talix 3.3ft 240W PD3.2 EPR USB-C to USB-C Charging Cable $6.40</div>
+        <div class="prices">
+          
+          <span class="price">$6.40</span>
+          
+          
+          <span class="original">$8.81</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,16.4 L1.9,16.3 L3.8,6.9 L5.8,11.7 L7.7,10.6 L9.6,16.2 L11.5,12.4 L13.5,6.2 L15.4,4.4 L17.3,1.1 L19.2,1.0 L21.2,11.2 L23.1,7.7 L25.0,4.2 L26.9,10.3 L28.8,2.4 L30.8,11.3 L32.7,1.5 L34.6,10.0 L36.5,10.4 L38.5,8.0 L40.4,8.6 L42.3,4.2 L44.2,24.7 L46.2,16.6 L48.1,16.4 L50.0,1.9 L51.9,11.6 L53.8,14.9 L55.8,11.3 L57.7,15.7 L59.6,6.6 L61.5,13.0 L63.5,27.0 L65.4,5.3 L67.3,4.0 L69.2,12.3 L71.2,5.1 L73.1,3.5 L75.0,25.3 L76.9,10.7 L78.8,13.7 L80.8,6.9 L82.7,1.3 L84.6,12.7 L86.5,5.1 L88.5,6.0 L90.4,15.4 L92.3,1.3 L94.2,17.7 L96.2,8.7 L98.1,16.7 L100.0,3.5" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$4.37</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0GXYF49GX?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;27%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://cdn.shopsale.com/attachments/scraped-1793888399371-249636520.jpg" alt="Countertop Water Filter Hot Dispenser" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Countertop Water Filter Hot Dispenser</div>
+        <div class="prices">
+          
+          <span class="price">$64.99</span>
+          
+          
+          <span class="original">$89.52</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,11.0 L1.9,5.4 L3.8,10.7 L5.8,15.4 L7.7,12.2 L9.6,11.7 L11.5,1.0 L13.5,8.3 L15.4,10.2 L17.3,13.9 L19.2,7.0 L21.2,16.2 L23.1,17.6 L25.0,13.4 L26.9,5.9 L28.8,13.4 L30.8,4.3 L32.7,10.1 L34.6,12.9 L36.5,1.8 L38.5,10.6 L40.4,9.0 L42.3,18.6 L44.2,4.2 L46.2,1.9 L48.1,18.4 L50.0,27.0 L51.9,10.3 L53.8,17.7 L55.8,2.5 L57.7,8.3 L59.6,17.5 L61.5,8.0 L63.5,19.0 L65.4,19.2 L67.3,17.5 L69.2,1.6 L71.2,3.2 L73.1,16.5 L75.0,3.3 L76.9,5.1 L78.8,3.1 L80.8,11.6 L82.7,17.6 L84.6,19.1 L86.5,1.4 L88.5,18.3 L90.4,4.7 L92.3,3.4 L94.2,8.8 L96.2,15.7 L98.1,6.5 L100.0,12.8" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$43.92</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://shopsale.com/products/countertop-water-filter-hot-dispenser" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;27%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://cdn.ihotoffers.com/attachments/scraped-1793193095214-467638967.jpg" alt="Ninja Slushi 96oz. Frozen Drink Maker" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Ninja Slushi 96oz. Frozen Drink Maker</div>
+        <div class="prices">
+          
+          <span class="price">$349.99</span>
+          
+          
+          <span class="original">$480.85</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,12.3 L1.9,1.2 L3.8,14.6 L5.8,6.0 L7.7,10.6 L9.6,17.0 L11.5,8.7 L13.5,14.5 L15.4,1.0 L17.3,9.0 L19.2,15.9 L21.2,15.2 L23.1,8.9 L25.0,6.7 L26.9,8.4 L28.8,8.4 L30.8,16.9 L32.7,1.8 L34.6,7.6 L36.5,17.1 L38.5,14.6 L40.4,27.0 L42.3,7.5 L44.2,17.3 L46.2,26.7 L48.1,12.0 L50.0,2.8 L51.9,14.2 L53.8,7.7 L55.8,16.5 L57.7,3.1 L59.6,5.3 L61.5,11.9 L63.5,16.4 L65.4,6.0 L67.3,4.7 L69.2,5.6 L71.2,9.2 L73.1,8.7 L75.0,11.2 L76.9,14.9 L78.8,14.6 L80.8,2.5 L82.7,8.4 L84.6,10.4 L86.5,10.6 L88.5,12.1 L90.4,14.5 L92.3,14.3 L94.2,9.3 L96.2,1.2 L98.1,17.3 L100.0,17.1" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$236.59</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://ihotoffers.com/offer/ninja-slushi-96oz-frozen-drink-maker-642542" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Electronics">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;27%</span>
+        
+        <span class="badge-cat">Electronics</span>
+        
+        <div class="img-fallback"></div>
+        
+      </div>
+      <div class="body">
+        <div class="title">Energizer 10,000mAh Slim Metal 20W Magnetic Wireless Power Bank - $15.99</div>
+        <div class="prices">
+          
+          <span class="price">$15.99</span>
+          
+          
+          <span class="original">$21.86</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,14.1 L1.9,8.1 L3.8,8.1 L5.8,15.7 L7.7,1.4 L9.6,2.4 L11.5,14.7 L13.5,6.5 L15.4,7.5 L17.3,14.1 L19.2,5.6 L21.2,6.8 L23.1,12.3 L25.0,8.0 L26.9,5.3 L28.8,6.3 L30.8,8.5 L32.7,6.2 L34.6,14.0 L36.5,11.1 L38.5,9.7 L40.4,3.4 L42.3,1.9 L44.2,1.0 L46.2,12.7 L48.1,2.2 L50.0,1.4 L51.9,6.6 L53.8,9.0 L55.8,12.0 L57.7,7.5 L59.6,9.9 L61.5,13.2 L63.5,10.8 L65.4,11.4 L67.3,10.9 L69.2,10.1 L71.2,6.3 L73.1,5.0 L75.0,6.1 L76.9,14.3 L78.8,2.6 L80.8,12.8 L82.7,1.3 L84.6,27.0 L86.5,9.6 L88.5,2.2 L90.4,7.6 L92.3,12.5 L94.2,6.4 L96.2,14.1 L98.1,8.9 L100.0,3.8" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$9.73</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://gottadeal.com/deal/479787" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;27%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://cdn.shopsale.com/attachments/attachments-1793979220139-644847760.png" alt="Electric 9QT Chafing Dish Buffet Set" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Electric 9QT Chafing Dish Buffet Set</div>
+        <div class="prices">
+          
+          <span class="price">$44.99</span>
+          
+          
+          <span class="original">$61.54</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,20.5 L1.9,23.6 L3.8,21.8 L5.8,3.9 L7.7,13.2 L9.6,8.3 L11.5,21.2 L13.5,2.5 L15.4,22.6 L17.3,10.2 L19.2,6.6 L21.2,11.5 L23.1,18.5 L25.0,8.8 L26.9,7.2 L28.8,3.9 L30.8,17.9 L32.7,4.2 L34.6,15.1 L36.5,16.3 L38.5,15.4 L40.4,4.2 L42.3,17.3 L44.2,27.0 L46.2,26.4 L48.1,24.8 L50.0,24.2 L51.9,24.7 L53.8,13.7 L55.8,8.3 L57.7,14.7 L59.6,18.8 L61.5,7.3 L63.5,7.9 L65.4,9.2 L67.3,15.8 L69.2,16.9 L71.2,11.7 L73.1,25.4 L75.0,6.5 L76.9,22.3 L78.8,1.0 L80.8,19.8 L82.7,6.2 L84.6,5.4 L86.5,3.1 L88.5,25.1 L90.4,25.2 L92.3,8.5 L94.2,26.5 L96.2,18.1 L98.1,18.7 L100.0,24.5" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$29.72</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://shopsale.com/products/electric-9qt-chafing-dish-buffet-set" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Electronics">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;27%</span>
+        
+        <span class="badge-cat">Electronics</span>
+        
+        <img src="https://d.dlnws.com/64599/1793958656-71qlmtcfpkl.jpg?h=250&amp;amp;w=250" alt="1/2&#34; Digital Torque Adapter Set for $18 + free w/ Prime" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">1/2&#34; Digital Torque Adapter Set for $18 + free w/ Prime</div>
+        <div class="prices">
+          
+          <span class="price">$110.48</span>
+          
+          
+          <span class="original">$150.93</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,5.6 L1.9,3.9 L3.8,2.2 L5.8,2.4 L7.7,4.7 L9.6,8.8 L11.5,12.7 L13.5,6.2 L15.4,11.9 L17.3,2.0 L19.2,5.1 L21.2,8.7 L23.1,12.8 L25.0,9.0 L26.9,1.4 L28.8,6.5 L30.8,7.7 L32.7,3.5 L34.6,6.4 L36.5,3.5 L38.5,2.1 L40.4,10.7 L42.3,7.6 L44.2,7.4 L46.2,21.9 L48.1,13.8 L50.0,11.8 L51.9,27.0 L53.8,12.9 L55.8,12.2 L57.7,5.5 L59.6,8.0 L61.5,6.6 L63.5,2.8 L65.4,13.3 L67.3,6.2 L69.2,12.1 L71.2,10.2 L73.1,10.7 L75.0,4.7 L76.9,7.7 L78.8,12.3 L80.8,8.7 L82.7,11.8 L84.6,13.0 L86.5,1.4 L88.5,4.7 L90.4,4.0 L92.3,1.0 L94.2,1.7 L96.2,12.1 L98.1,13.7 L100.0,12.5" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$61.30</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.dealnews.com/1-2-Digital-Torque-Adapter-Set-for-18-free-w-Prime/22355449.html?iref=rss-hotness" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Electronics">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;27%</span>
+        
+        <span class="badge-cat">Electronics</span>
+        
+        <img src="https://cdn.shopsale.com/attachments/scraped-1793887728438-818972354.jpg" alt="3-in-1 Electric Nail Clipper w/LED Display" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">3-in-1 Electric Nail Clipper w/LED Display</div>
+        <div class="prices">
+          
+          <span class="price">$21.99</span>
+          
+          
+          <span class="original">$30.04</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,4.2 L1.9,6.8 L3.8,13.5 L5.8,13.4 L7.7,7.0 L9.6,8.1 L11.5,15.4 L13.5,11.6 L15.4,2.9 L17.3,14.7 L19.2,13.5 L21.2,15.8 L23.1,13.1 L25.0,7.8 L26.9,5.9 L28.8,15.7 L30.8,7.8 L32.7,10.8 L34.6,13.3 L36.5,14.7 L38.5,12.5 L40.4,12.6 L42.3,7.0 L44.2,6.5 L46.2,8.2 L48.1,6.3 L50.0,9.5 L51.9,5.7 L53.8,4.6 L55.8,6.3 L57.7,9.1 L59.6,10.2 L61.5,1.6 L63.5,14.4 L65.4,16.1 L67.3,11.7 L69.2,1.2 L71.2,7.0 L73.1,6.3 L75.0,1.0 L76.9,8.1 L78.8,10.6 L80.8,3.3 L82.7,15.0 L84.6,15.5 L86.5,6.3 L88.5,1.1 L90.4,3.1 L92.3,2.9 L94.2,5.5 L96.2,10.5 L98.1,27.0 L100.0,15.0" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$14.05</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://shopsale.com/products/3-in-1-electric-nail-clipper-wled-display" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Fashion">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;27%</span>
+        
+        <span class="badge-cat">Fashion</span>
+        
+        <img src="https://www.techbargains.com/imagery/deals/273862.1793987894.fit_lim.size_125x125.jpg" alt="Underarmour UA Tech Textured Shirt $17.26" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Underarmour UA Tech Textured Shirt $17.26</div>
+        <div class="prices">
+          
+          <span class="price">$17.26</span>
+          
+          
+          <span class="original">$23.59</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,2.8 L1.9,3.8 L3.8,3.6 L5.8,18.2 L7.7,17.6 L9.6,9.9 L11.5,5.5 L13.5,16.7 L15.4,2.6 L17.3,19.3 L19.2,20.1 L21.2,7.6 L23.1,13.8 L25.0,19.7 L26.9,17.0 L28.8,6.7 L30.8,23.8 L32.7,2.3 L34.6,2.2 L36.5,8.9 L38.5,12.1 L40.4,25.2 L42.3,8.8 L44.2,19.0 L46.2,25.6 L48.1,6.3 L50.0,23.2 L51.9,13.0 L53.8,12.6 L55.8,7.4 L57.7,7.9 L59.6,18.8 L61.5,16.4 L63.5,17.7 L65.4,11.9 L67.3,20.3 L69.2,18.1 L71.2,6.4 L73.1,24.8 L75.0,20.9 L76.9,2.8 L78.8,27.0 L80.8,22.4 L82.7,20.4 L84.6,6.4 L86.5,8.1 L88.5,26.7 L90.4,26.4 L92.3,19.5 L94.2,22.6 L96.2,17.0 L98.1,1.0 L100.0,2.0" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$10.18</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.underarmour.com/en-us/p/ua_tech_textured_mens_1-2_zip/1382797.html?dwvar_1382797_size=LG&amp;extendedSize=regular&amp;dwvar_1382797_color=481" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;27%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://images.dealcatcher.com/offers/7ba8a501-1185-459e-a0df-f38be6d4199d.jpeg" alt="Amazon - FIT KING Cordless Hand Massager with Heat $30.00" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Amazon - FIT KING Cordless Hand Massager with Heat $30.00</div>
+        <div class="prices">
+          
+          <span class="price">$30.00</span>
+          
+          
+          <span class="original">$40.91</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,21.5 L1.9,6.4 L3.8,17.2 L5.8,1.7 L7.7,25.4 L9.6,14.0 L11.5,11.9 L13.5,3.1 L15.4,7.2 L17.3,3.9 L19.2,19.0 L21.2,19.5 L23.1,11.6 L25.0,2.3 L26.9,19.2 L28.8,9.4 L30.8,19.1 L32.7,10.6 L34.6,25.2 L36.5,19.1 L38.5,19.5 L40.4,13.2 L42.3,16.2 L44.2,7.7 L46.2,23.7 L48.1,26.2 L50.0,26.8 L51.9,15.4 L53.8,9.2 L55.8,24.1 L57.7,12.6 L59.6,16.3 L61.5,2.5 L63.5,2.0 L65.4,14.9 L67.3,24.7 L69.2,22.5 L71.2,14.2 L73.1,21.2 L75.0,17.8 L76.9,18.9 L78.8,26.7 L80.8,1.0 L82.7,18.3 L84.6,10.0 L86.5,19.9 L88.5,18.5 L90.4,22.1 L92.3,27.0 L94.2,6.5 L96.2,10.5 L98.1,2.1 L100.0,2.5" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$16.91</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0BP843Y9K?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;27%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <div class="img-fallback"></div>
+        
+      </div>
+      <div class="body">
+        <div class="title">Bamboo Harmony 6-Piece Sheet Set in 3 Colors, Queen or King - $29.98 Per Set</div>
+        <div class="prices">
+          
+          <span class="price">$29.98</span>
+          
+          
+          <span class="original">$40.83</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,3.1 L1.9,16.5 L3.8,4.7 L5.8,16.6 L7.7,9.5 L9.6,5.4 L11.5,18.4 L13.5,18.1 L15.4,2.1 L17.3,27.0 L19.2,4.4 L21.2,19.2 L23.1,2.7 L25.0,12.1 L26.9,14.7 L28.8,9.6 L30.8,13.3 L32.7,14.9 L34.6,9.8 L36.5,9.7 L38.5,1.7 L40.4,14.2 L42.3,11.2 L44.2,8.0 L46.2,17.8 L48.1,5.8 L50.0,16.5 L51.9,12.3 L53.8,7.4 L55.8,7.5 L57.7,9.5 L59.6,12.7 L61.5,3.8 L63.5,17.6 L65.4,11.7 L67.3,18.3 L69.2,15.3 L71.2,18.7 L73.1,17.5 L75.0,13.4 L76.9,6.9 L78.8,5.2 L80.8,9.7 L82.7,6.7 L84.6,15.2 L86.5,16.4 L88.5,5.1 L90.4,1.0 L92.3,12.0 L94.2,5.2 L96.2,3.5 L98.1,13.2 L100.0,15.8" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$19.27</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://gottadeal.com/deal/479794" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Electronics">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;26%</span>
+        
+        <span class="badge-cat">Electronics</span>
+        
+        <img src="https://cdn.shopsale.com/attachments/attachments-1793900089246-614753042.png" alt="Ring Battery Doorbell 2K Bundle w/Indoor Cam" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Ring Battery Doorbell 2K Bundle w/Indoor Cam</div>
+        <div class="prices">
+          
+          <span class="price">$49.99</span>
+          
+          
+          <span class="original">$68.01</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,1.0 L1.9,1.0 L3.8,17.5 L5.8,15.7 L7.7,5.0 L9.6,14.6 L11.5,8.2 L13.5,14.0 L15.4,2.3 L17.3,3.5 L19.2,11.6 L21.2,14.4 L23.1,15.7 L25.0,18.3 L26.9,7.0 L28.8,11.1 L30.8,6.0 L32.7,18.3 L34.6,14.9 L36.5,17.7 L38.5,11.6 L40.4,6.0 L42.3,14.0 L44.2,7.2 L46.2,10.1 L48.1,9.0 L50.0,17.3 L51.9,18.4 L53.8,13.0 L55.8,5.9 L57.7,3.0 L59.6,12.4 L61.5,8.5 L63.5,3.8 L65.4,13.8 L67.3,5.2 L69.2,14.2 L71.2,19.0 L73.1,7.7 L75.0,4.0 L76.9,18.2 L78.8,10.0 L80.8,27.0 L82.7,7.7 L84.6,1.9 L86.5,7.2 L88.5,4.8 L90.4,2.7 L92.3,3.1 L94.2,10.7 L96.2,6.5 L98.1,3.8 L100.0,14.9" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$31.62</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://shopsale.com/products/ring-battery-doorbell-2k-bundle-windoor-cam" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Fashion">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;26%</span>
+        
+        <span class="badge-cat">Fashion</span>
+        
+        <img src="https://cdn.ihotoffers.com/attachments/scraped-1793714434483-56423994.jpg" alt="Canada Weather Women&#39;s Hooded Puffer Jacket" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Canada Weather Women&#39;s Hooded Puffer Jacket</div>
+        <div class="prices">
+          
+          <span class="price">$120.00</span>
+          
+          
+          <span class="original">$163.04</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,15.0 L1.9,26.8 L3.8,21.6 L5.8,27.0 L7.7,5.1 L9.6,6.2 L11.5,23.0 L13.5,2.0 L15.4,4.9 L17.3,15.4 L19.2,22.2 L21.2,11.0 L23.1,10.6 L25.0,2.7 L26.9,13.8 L28.8,11.5 L30.8,1.0 L32.7,23.7 L34.6,12.2 L36.5,26.8 L38.5,24.4 L40.4,14.9 L42.3,20.7 L44.2,14.3 L46.2,26.8 L48.1,18.0 L50.0,10.1 L51.9,9.9 L53.8,5.4 L55.8,12.8 L57.7,19.1 L59.6,22.3 L61.5,1.2 L63.5,8.0 L65.4,24.5 L67.3,23.5 L69.2,12.2 L71.2,6.6 L73.1,17.7 L75.0,3.5 L76.9,12.2 L78.8,4.4 L80.8,7.7 L82.7,22.4 L84.6,21.6 L86.5,24.9 L88.5,9.4 L90.4,25.6 L92.3,14.6 L94.2,19.8 L96.2,5.8 L98.1,1.7 L100.0,16.3" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$74.42</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://ihotoffers.com/offer/canada-weather-womens-hooded-puffer-jacket-648425" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;26%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <div class="img-fallback"></div>
+        
+      </div>
+      <div class="body">
+        <div class="title">DEWALT Tool Box, Tough Case, Medium, Case Only (DWAN2190)</div>
+        <div class="prices">
+          
+          <span class="price">$379.11</span>
+          
+          
+          <span class="original">$512.69</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,13.2 L1.9,6.9 L3.8,10.3 L5.8,7.8 L7.7,6.2 L9.6,4.1 L11.5,2.1 L13.5,10.0 L15.4,5.9 L17.3,6.2 L19.2,11.0 L21.2,9.9 L23.1,11.3 L25.0,2.9 L26.9,5.7 L28.8,2.5 L30.8,3.1 L32.7,4.5 L34.6,4.6 L36.5,1.0 L38.5,6.0 L40.4,2.9 L42.3,10.5 L44.2,24.3 L46.2,5.7 L48.1,3.7 L50.0,6.8 L51.9,1.7 L53.8,20.2 L55.8,5.7 L57.7,8.2 L59.6,13.0 L61.5,3.6 L63.5,2.4 L65.4,27.0 L67.3,3.8 L69.2,7.2 L71.2,5.5 L73.1,3.7 L75.0,11.3 L76.9,21.2 L78.8,6.1 L80.8,12.6 L82.7,2.7 L84.6,2.0 L86.5,8.9 L88.5,11.1 L90.4,11.7 L92.3,13.7 L94.2,12.1 L96.2,4.9 L98.1,13.2 L100.0,4.1" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$214.48</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B07Z6XBYJT?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;26%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://d.dlnws.com/64599/1787929464-0-1381085203729-737.svg?h=44&amp;amp;w=206" alt="Fanatics Holiday Head Start Promo Code: 25% to 35% off + extra 5% off clearance" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Fanatics Holiday Head Start Promo Code: 25% to 35% off + extra 5% off clearance</div>
+        <div class="prices">
+          
+          <span class="price">$149.38</span>
+          
+          
+          <span class="original">$201.63</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,4.9 L1.9,11.2 L3.8,3.3 L5.8,7.5 L7.7,6.4 L9.6,7.0 L11.5,10.0 L13.5,7.6 L15.4,1.0 L17.3,14.1 L19.2,4.8 L21.2,5.8 L23.1,14.7 L25.0,2.8 L26.9,2.3 L28.8,5.9 L30.8,6.6 L32.7,12.1 L34.6,13.9 L36.5,2.2 L38.5,9.4 L40.4,7.3 L42.3,5.6 L44.2,14.2 L46.2,5.3 L48.1,11.1 L50.0,8.9 L51.9,3.1 L53.8,3.9 L55.8,6.4 L57.7,13.8 L59.6,11.2 L61.5,21.0 L63.5,3.0 L65.4,3.2 L67.3,7.9 L69.2,4.1 L71.2,6.1 L73.1,27.0 L75.0,14.7 L76.9,4.8 L78.8,5.0 L80.8,7.4 L82.7,8.1 L84.6,2.0 L86.5,7.7 L88.5,14.2 L90.4,7.1 L92.3,11.3 L94.2,7.0 L96.2,11.7 L98.1,10.5 L100.0,7.2" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$88.56</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.dealnews.com/Fanatics-Holiday-Head-Start-Promo-Code-25-to-35-off-extra-5-off-clearance/22355413.html?iref=rss-hotness" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;26%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://images.dealcatcher.com/offers/d8b71a41-6fea-46a2-b32c-b3a68b82a7a9.jpeg" alt="Amazon - TranquilBliss Christmas Tree Tinsel Garland, 50 Feet $7.79" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Amazon - TranquilBliss Christmas Tree Tinsel Garland, 50 Feet $7.79</div>
+        <div class="prices">
+          
+          <span class="price">$7.79</span>
+          
+          
+          <span class="original">$10.47</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,8.0 L1.9,4.2 L3.8,3.0 L5.8,5.0 L7.7,1.7 L9.6,1.5 L11.5,6.6 L13.5,7.6 L15.4,14.4 L17.3,4.9 L19.2,5.2 L21.2,7.9 L23.1,9.5 L25.0,14.4 L26.9,8.8 L28.8,6.6 L30.8,8.2 L32.7,5.8 L34.6,4.4 L36.5,12.6 L38.5,17.6 L40.4,3.3 L42.3,1.0 L44.2,16.4 L46.2,1.1 L48.1,10.2 L50.0,12.8 L51.9,5.2 L53.8,10.9 L55.8,9.0 L57.7,1.2 L59.6,27.0 L61.5,4.5 L63.5,15.4 L65.4,9.6 L67.3,10.0 L69.2,16.4 L71.2,13.5 L73.1,12.2 L75.0,2.8 L76.9,9.3 L78.8,12.4 L80.8,11.1 L82.7,14.5 L84.6,13.3 L86.5,9.2 L88.5,12.5 L90.4,9.9 L92.3,8.7 L94.2,15.1 L96.2,7.1 L98.1,7.7 L100.0,13.3" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$4.34</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0CHBF3J2N?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;26%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://cdn.shopsale.com/attachments/attachments-1793896094585-282812114.png" alt="Wondershop 25&#34; Red Tinsel LED Hanging Bow" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Wondershop 25&#34; Red Tinsel LED Hanging Bow</div>
+        <div class="prices">
+          
+          <span class="price">$24.00</span>
+          
+          
+          <span class="original">$32.26</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,14.8 L1.9,14.7 L3.8,15.0 L5.8,8.8 L7.7,6.9 L9.6,19.3 L11.5,1.2 L13.5,4.7 L15.4,4.1 L17.3,15.1 L19.2,1.9 L21.2,3.4 L23.1,17.1 L25.0,8.1 L26.9,16.0 L28.8,9.6 L30.8,9.2 L32.7,16.3 L34.6,4.7 L36.5,9.8 L38.5,7.2 L40.4,8.5 L42.3,9.8 L44.2,27.0 L46.2,17.2 L48.1,4.4 L50.0,18.3 L51.9,1.4 L53.8,1.0 L55.8,9.3 L57.7,14.7 L59.6,16.6 L61.5,8.4 L63.5,17.8 L65.4,11.5 L67.3,17.7 L69.2,18.3 L71.2,4.9 L73.1,18.5 L75.0,10.5 L76.9,2.2 L78.8,8.0 L80.8,8.3 L82.7,14.6 L84.6,1.9 L86.5,15.9 L88.5,8.9 L90.4,3.6 L92.3,13.5 L94.2,13.1 L96.2,17.5 L98.1,18.2 L100.0,11.2" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$14.80</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://shopsale.com/products/wondershop-25-red-tinsel-led-hanging-bow" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;25%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://www.techbargains.com/imagery/deals/273869.1793991392.fit_lim.size_125x125.jpg" alt="Ultramic 16W Karaoke Machine with 2 Wireless Microphones $26.99" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Ultramic 16W Karaoke Machine with 2 Wireless Microphones $26.99</div>
+        <div class="prices">
+          
+          <span class="price">$26.99</span>
+          
+          
+          <span class="original">$36.20</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,1.7 L1.9,14.1 L3.8,11.6 L5.8,7.7 L7.7,4.5 L9.6,5.6 L11.5,13.8 L13.5,5.0 L15.4,15.7 L17.3,15.8 L19.2,4.9 L21.2,1.0 L23.1,15.7 L25.0,5.1 L26.9,6.8 L28.8,11.8 L30.8,4.0 L32.7,2.7 L34.6,7.7 L36.5,1.3 L38.5,11.0 L40.4,16.9 L42.3,15.8 L44.2,27.0 L46.2,14.5 L48.1,1.8 L50.0,13.0 L51.9,17.4 L53.8,1.8 L55.8,9.9 L57.7,7.1 L59.6,5.4 L61.5,7.3 L63.5,4.4 L65.4,10.9 L67.3,16.0 L69.2,9.2 L71.2,14.8 L73.1,16.9 L75.0,10.0 L76.9,5.3 L78.8,15.3 L80.8,17.7 L82.7,10.7 L84.6,17.9 L86.5,14.1 L88.5,1.2 L90.4,13.7 L92.3,8.1 L94.2,12.7 L96.2,12.3 L98.1,2.4 L100.0,7.2" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$15.40</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0H8CT2MSL?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Electronics">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;25%</span>
+        
+        <span class="badge-cat">Electronics</span>
+        
+        <img src="https://www.techbargains.com/imagery/deals/273861.1793987295.fit_lim.size_125x125.jpg" alt="Dewalt 20V MAX XR 3/8&amp;quot; &amp;amp; 1/2&amp;quot; Sealed Head Cordless Ratchet (Bare Tool Only) $194.99" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Dewalt 20V MAX XR 3/8&amp;quot; &amp;amp; 1/2&amp;quot; Sealed Head Cordless Ratchet (Bare Tool Only) $194.99</div>
+        <div class="prices">
+          
+          <span class="price">$194.99</span>
+          
+          
+          <span class="original">$261.38</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,11.3 L1.9,6.5 L3.8,1.0 L5.8,10.9 L7.7,2.8 L9.6,6.6 L11.5,13.6 L13.5,2.2 L15.4,4.9 L17.3,5.7 L19.2,11.4 L21.2,25.2 L23.1,8.2 L25.0,1.4 L26.9,9.7 L28.8,10.6 L30.8,12.3 L32.7,7.8 L34.6,9.8 L36.5,10.5 L38.5,6.9 L40.4,2.1 L42.3,18.5 L44.2,10.9 L46.2,8.0 L48.1,9.0 L50.0,6.6 L51.9,11.3 L53.8,1.9 L55.8,7.2 L57.7,9.0 L59.6,8.6 L61.5,7.2 L63.5,1.0 L65.4,11.7 L67.3,2.1 L69.2,12.5 L71.2,24.7 L73.1,4.2 L75.0,5.0 L76.9,13.3 L78.8,13.8 L80.8,1.7 L82.7,27.0 L84.6,5.4 L86.5,8.4 L88.5,5.6 L90.4,12.4 L92.3,3.1 L94.2,13.7 L96.2,13.2 L98.1,10.2 L100.0,9.0" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$107.51</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B00EQ53HG4?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Electronics">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;25%</span>
+        
+        <span class="badge-cat">Electronics</span>
+        
+        <img src="https://slickdeals.net/attachment/8/6/6/3/0/450x450/22240401.thumb" alt="Prime Members: EF EcoFlow 45W GaN 3-In-1 Retractable USB-C Fast Charger Cable $12 + Free S&amp;H" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Prime Members: EF EcoFlow 45W GaN 3-In-1 Retractable USB-C Fast Charger Cable $12 + Free S&amp;H</div>
+        <div class="prices">
+          
+          <span class="price">$11.99</span>
+          
+          
+          <span class="original">$16.08</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,11.1 L1.9,12.3 L3.8,5.0 L5.8,4.5 L7.7,8.0 L9.6,7.7 L11.5,6.9 L13.5,12.6 L15.4,15.7 L17.3,3.6 L19.2,13.6 L21.2,15.2 L23.1,6.3 L25.0,6.6 L26.9,8.6 L28.8,1.0 L30.8,3.6 L32.7,3.8 L34.6,4.0 L36.5,14.5 L38.5,25.6 L40.4,2.0 L42.3,27.0 L44.2,16.0 L46.2,1.6 L48.1,2.5 L50.0,8.7 L51.9,13.7 L53.8,14.2 L55.8,2.2 L57.7,9.8 L59.6,11.1 L61.5,13.1 L63.5,10.9 L65.4,7.4 L67.3,15.3 L69.2,9.2 L71.2,8.4 L73.1,11.3 L75.0,7.2 L76.9,2.3 L78.8,10.9 L80.8,2.3 L82.7,10.0 L84.6,2.1 L86.5,9.2 L88.5,11.9 L90.4,1.9 L92.3,16.3 L94.2,16.1 L96.2,11.6 L98.1,1.4 L100.0,11.4" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$7.77</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://slickdeals.net/f/20264679-prime-members-ecoflow-45w-3-in-1-retractable-usb-c-fast-charger-w-built-in-cable-dual-ports-11-99-free-shipping?utm_source=rss&amp;utm_content=fp&amp;utm_medium=RSS2" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;25%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://d.dlnws.com/64599/1783023204-1779361800-apple-iphone-back-view-pmpw.png?h=86&amp;amp;w=250" alt="Nordstrom Rack Clear the Rack Sale: Up to 94% off + extra 25% off +  free shipping w/ $89" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Nordstrom Rack Clear the Rack Sale: Up to 94% off + extra 25% off +  free shipping w/ $89</div>
+        <div class="prices">
+          
+          <span class="price">$89.00</span>
+          
+          
+          <span class="original">$119.35</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,8.8 L1.9,16.4 L3.8,9.5 L5.8,2.1 L7.7,14.8 L9.6,9.5 L11.5,14.8 L13.5,1.0 L15.4,10.5 L17.3,3.8 L19.2,27.0 L21.2,15.0 L23.1,7.1 L25.0,2.9 L26.9,10.1 L28.8,16.8 L30.8,9.0 L32.7,10.6 L34.6,14.4 L36.5,10.9 L38.5,15.7 L40.4,14.6 L42.3,9.8 L44.2,7.0 L46.2,13.4 L48.1,11.7 L50.0,8.3 L51.9,16.9 L53.8,14.6 L55.8,10.6 L57.7,6.6 L59.6,6.9 L61.5,1.1 L63.5,7.4 L65.4,14.2 L67.3,11.6 L69.2,7.5 L71.2,9.8 L73.1,14.2 L75.0,13.4 L76.9,11.4 L78.8,16.4 L80.8,1.5 L82.7,14.7 L84.6,5.0 L86.5,2.6 L88.5,12.8 L90.4,14.7 L92.3,14.1 L94.2,14.1 L96.2,4.2 L98.1,8.7 L100.0,2.5" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$49.87</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.dealnews.com/Nordstrom-Rack-Clear-the-Rack-Sale-Up-to-94-off-extra-25-off-free-shipping-w-89/22355436.html?iref=rss-hotness" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;25%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://images-na.ssl-images-amazon.com/images/S/mediaservice.woot.com/5bb39a1b-18e4-4317-8a6a-6b5016551fc8._AC_SR552,276_.png" alt="Gifts for Everyone Sale at Woot!: Up to 95% off Great Gift Ideas with Prime S&amp;H" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Gifts for Everyone Sale at Woot!: Up to 95% off Great Gift Ideas with Prime S&amp;H</div>
+        <div class="prices">
+          
+          <span class="price">$291.26</span>
+          
+          
+          <span class="original">$390.32</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,1.8 L1.9,10.6 L3.8,3.2 L5.8,5.8 L7.7,8.5 L9.6,11.6 L11.5,2.2 L13.5,13.8 L15.4,8.6 L17.3,8.8 L19.2,1.6 L21.2,13.6 L23.1,7.0 L25.0,5.0 L26.9,8.3 L28.8,6.5 L30.8,8.6 L32.7,13.8 L34.6,12.8 L36.5,2.5 L38.5,11.6 L40.4,6.2 L42.3,11.4 L44.2,21.9 L46.2,11.1 L48.1,3.1 L50.0,10.5 L51.9,13.5 L53.8,10.1 L55.8,13.1 L57.7,2.1 L59.6,5.8 L61.5,27.0 L63.5,5.8 L65.4,22.3 L67.3,1.6 L69.2,4.4 L71.2,12.4 L73.1,6.6 L75.0,10.7 L76.9,2.0 L78.8,2.7 L80.8,13.1 L82.7,3.6 L84.6,3.1 L86.5,1.0 L88.5,8.5 L90.4,4.8 L92.3,6.7 L94.2,13.0 L96.2,4.1 L98.1,6.7 L100.0,6.4" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$167.48</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://gottadeal.com/deal/479792" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;25%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://images.dealcatcher.com/offers/3edaad03-60ac-4fda-ac9c-229973c8e136.avif" alt="Amazon - FIT KING Leg Compression Massager for Circulation and Edema Relief $39.00" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Amazon - FIT KING Leg Compression Massager for Circulation and Edema Relief $39.00</div>
+        <div class="prices">
+          
+          <span class="price">$39.00</span>
+          
+          
+          <span class="original">$52.20</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,7.9 L1.9,15.0 L3.8,15.2 L5.8,6.8 L7.7,8.1 L9.6,7.3 L11.5,14.7 L13.5,6.6 L15.4,5.9 L17.3,11.1 L19.2,9.9 L21.2,6.7 L23.1,1.0 L25.0,1.1 L26.9,10.3 L28.8,8.6 L30.8,2.8 L32.7,7.6 L34.6,11.9 L36.5,14.3 L38.5,6.0 L40.4,1.9 L42.3,14.5 L44.2,6.9 L46.2,8.9 L48.1,4.6 L50.0,10.2 L51.9,7.1 L53.8,9.0 L55.8,3.6 L57.7,4.1 L59.6,4.6 L61.5,5.7 L63.5,11.4 L65.4,27.0 L67.3,13.3 L69.2,13.7 L71.2,10.9 L73.1,5.4 L75.0,2.4 L76.9,2.4 L78.8,2.8 L80.8,4.4 L82.7,5.9 L84.6,3.1 L86.5,9.3 L88.5,9.2 L90.4,7.3 L92.3,14.9 L94.2,5.9 L96.2,13.5 L98.1,13.3 L100.0,9.0" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$24.39</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B07P3JJ2YK?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Gaming">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;25%</span>
+        
+        <span class="badge-cat">Gaming</span>
+        
+        <div class="img-fallback"></div>
+        
+      </div>
+      <div class="body">
+        <div class="title">Kohl&#39;s Black Friday Deal: Save 50% on Select Board Games, Card Games &amp; More</div>
+        <div class="prices">
+          
+          <span class="price">$403.75</span>
+          
+          
+          <span class="original">$538.89</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,11.8 L1.9,14.5 L3.8,17.6 L5.8,16.1 L7.7,19.6 L9.6,11.5 L11.5,10.1 L13.5,5.9 L15.4,7.1 L17.3,1.4 L19.2,7.0 L21.2,15.1 L23.1,5.9 L25.0,9.4 L26.9,3.3 L28.8,27.0 L30.8,9.7 L32.7,18.5 L34.6,18.9 L36.5,9.8 L38.5,14.2 L40.4,15.8 L42.3,6.6 L44.2,12.7 L46.2,14.3 L48.1,17.3 L50.0,6.9 L51.9,11.4 L53.8,16.8 L55.8,8.4 L57.7,7.0 L59.6,12.6 L61.5,17.4 L63.5,19.4 L65.4,3.7 L67.3,15.8 L69.2,5.3 L71.2,3.9 L73.1,19.0 L75.0,1.5 L76.9,4.1 L78.8,1.0 L80.8,15.1 L82.7,4.4 L84.6,10.4 L86.5,4.2 L88.5,13.4 L90.4,8.8 L92.3,9.6 L94.2,6.4 L96.2,3.0 L98.1,12.6 L100.0,3.5" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$230.76</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://gottadeal.com/deal/479786" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;25%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://cdn.shopsale.com/attachments/attachments-1790874274993-140124734.png" alt="PowerSmart 4400W 223cc Inverter Generator" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">PowerSmart 4400W 223cc Inverter Generator</div>
+        <div class="prices">
+          
+          <span class="price">$209.41</span>
+          
+          
+          <span class="original">$279.55</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,14.8 L1.9,17.7 L3.8,13.2 L5.8,14.5 L7.7,15.1 L9.6,4.7 L11.5,3.2 L13.5,19.2 L15.4,12.4 L17.3,13.6 L19.2,6.9 L21.2,23.0 L23.1,18.2 L25.0,19.6 L26.9,18.9 L28.8,14.7 L30.8,7.1 L32.7,15.3 L34.6,7.5 L36.5,1.9 L38.5,21.8 L40.4,8.6 L42.3,8.6 L44.2,13.1 L46.2,16.4 L48.1,15.5 L50.0,6.6 L51.9,17.5 L53.8,1.0 L55.8,19.3 L57.7,19.2 L59.6,27.0 L61.5,20.8 L63.5,5.6 L65.4,15.3 L67.3,9.9 L69.2,2.0 L71.2,18.2 L73.1,24.4 L75.0,11.2 L76.9,6.9 L78.8,23.7 L80.8,17.0 L82.7,16.1 L84.6,24.6 L86.5,21.3 L88.5,17.7 L90.4,8.0 L92.3,4.1 L94.2,19.3 L96.2,14.7 L98.1,18.4 L100.0,12.1" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$136.66</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://shopsale.com/products/powersmart-4400w-223cc-inverter-generator-649943" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;25%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://www.techbargains.com/imagery/deals/265853.1793989366.fit_lim.size_125x125.jpg" alt="Tughlax Super Bright Rechargeable LED Flashlights (3-Pack) $14.99" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Tughlax Super Bright Rechargeable LED Flashlights (3-Pack) $14.99</div>
+        <div class="prices">
+          
+          <span class="price">$14.99</span>
+          
+          
+          <span class="original">$20.00</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,1.5 L1.9,8.3 L3.8,11.0 L5.8,15.6 L7.7,13.0 L9.6,13.9 L11.5,3.1 L13.5,4.7 L15.4,3.3 L17.3,15.9 L19.2,13.3 L21.2,13.3 L23.1,11.2 L25.0,6.4 L26.9,10.5 L28.8,10.7 L30.8,12.6 L32.7,9.1 L34.6,2.5 L36.5,3.6 L38.5,13.6 L40.4,15.3 L42.3,15.4 L44.2,14.6 L46.2,6.6 L48.1,12.6 L50.0,12.4 L51.9,16.1 L53.8,11.2 L55.8,6.3 L57.7,14.5 L59.6,2.7 L61.5,27.0 L63.5,6.4 L65.4,4.2 L67.3,3.7 L69.2,6.3 L71.2,7.9 L73.1,12.3 L75.0,4.0 L76.9,12.0 L78.8,8.1 L80.8,3.8 L82.7,9.2 L84.6,13.0 L86.5,14.9 L88.5,13.6 L90.4,7.6 L92.3,4.7 L94.2,1.0 L96.2,13.4 L98.1,13.7 L100.0,14.4" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$9.15</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0FQ54KJWQ?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;25%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://d.dlnws.com/64599/1793094497-best-buy-logo-3x.png?h=171&amp;amp;w=250" alt="Best Buy Early Black Friday Doorbusters: Up to 70% off + free shipping" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Best Buy Early Black Friday Doorbusters: Up to 70% off + free shipping</div>
+        <div class="prices">
+          
+          <span class="price">$899.99</span>
+          
+          
+          <span class="original">$1200.00</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,16.4 L1.9,12.4 L3.8,10.0 L5.8,2.3 L7.7,7.8 L9.6,9.8 L11.5,15.7 L13.5,10.6 L15.4,9.6 L17.3,1.0 L19.2,2.8 L21.2,11.2 L23.1,12.1 L25.0,1.5 L26.9,4.7 L28.8,11.0 L30.8,1.1 L32.7,16.8 L34.6,16.7 L36.5,5.1 L38.5,2.1 L40.4,9.6 L42.3,6.5 L44.2,14.9 L46.2,16.2 L48.1,9.0 L50.0,11.1 L51.9,1.1 L53.8,4.1 L55.8,5.5 L57.7,4.5 L59.6,8.1 L61.5,16.4 L63.5,8.7 L65.4,6.5 L67.3,18.0 L69.2,11.6 L71.2,14.4 L73.1,16.4 L75.0,3.7 L76.9,24.9 L78.8,9.5 L80.8,27.0 L82.7,16.6 L84.6,7.3 L86.5,25.8 L88.5,4.5 L90.4,1.1 L92.3,17.5 L94.2,1.4 L96.2,4.3 L98.1,11.7 L100.0,7.2" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$626.39</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.dealnews.com/Best-Buy-Early-Black-Friday-Doorbusters-Up-to-70-off-free-shipping/22355504.html?iref=rss-hotness" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Home &amp; Kitchen">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;25%</span>
+        
+        <span class="badge-cat">Home &amp; Kitchen</span>
+        
+        <img src="https://images.dealcatcher.com/offers/cfb2b482-8721-40d9-a97a-c4a7d20a5f00.jpeg" alt="Amazon - Innqoo Candle Warmer Lamp with Timer $12.97" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Amazon - Innqoo Candle Warmer Lamp with Timer $12.97</div>
+        <div class="prices">
+          
+          <span class="price">$12.97</span>
+          
+          
+          <span class="original">$17.26</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,14.8 L1.9,9.7 L3.8,11.8 L5.8,13.0 L7.7,11.9 L9.6,12.7 L11.5,11.2 L13.5,9.1 L15.4,12.3 L17.3,20.6 L19.2,27.0 L21.2,13.3 L23.1,12.1 L25.0,2.3 L26.9,6.2 L28.8,11.0 L30.8,7.2 L32.7,2.8 L34.6,1.0 L36.5,10.5 L38.5,11.2 L40.4,6.6 L42.3,5.5 L44.2,4.8 L46.2,12.8 L48.1,14.9 L50.0,13.6 L51.9,6.9 L53.8,13.9 L55.8,8.9 L57.7,2.6 L59.6,11.2 L61.5,5.5 L63.5,5.9 L65.4,8.0 L67.3,13.1 L69.2,12.9 L71.2,13.2 L73.1,4.3 L75.0,3.4 L76.9,8.7 L78.8,1.5 L80.8,2.4 L82.7,12.3 L84.6,2.4 L86.5,7.5 L88.5,9.0 L90.4,11.4 L92.3,14.0 L94.2,5.1 L96.2,15.1 L98.1,9.1 L100.0,9.6" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$7.82</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0DZFGTCLR?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;25%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://www.techbargains.com/imagery/deals/273864.1793988235.fit_lim.size_125x125.jpg" alt="Diet Coke 16.9oz Sugar Free Soda Soft Drink Bottles (18-Pack) $11.17" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Diet Coke 16.9oz Sugar Free Soda Soft Drink Bottles (18-Pack) $11.17</div>
+        <div class="prices">
+          
+          <span class="price">$11.17</span>
+          
+          
+          <span class="original">$14.85</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,11.2 L1.9,23.9 L3.8,21.4 L5.8,12.7 L7.7,26.9 L9.6,19.0 L11.5,14.2 L13.5,26.8 L15.4,20.8 L17.3,2.9 L19.2,5.7 L21.2,11.4 L23.1,15.9 L25.0,22.2 L26.9,20.6 L28.8,17.3 L30.8,10.2 L32.7,19.2 L34.6,23.1 L36.5,12.7 L38.5,18.2 L40.4,17.3 L42.3,17.7 L44.2,14.9 L46.2,15.1 L48.1,22.3 L50.0,15.6 L51.9,7.9 L53.8,15.1 L55.8,8.0 L57.7,9.5 L59.6,18.7 L61.5,26.1 L63.5,10.4 L65.4,8.2 L67.3,17.3 L69.2,6.6 L71.2,11.5 L73.1,24.5 L75.0,3.3 L76.9,1.0 L78.8,25.7 L80.8,20.4 L82.7,24.7 L84.6,10.5 L86.5,18.4 L88.5,23.0 L90.4,16.0 L92.3,22.1 L94.2,27.0 L96.2,19.1 L98.1,8.7 L100.0,5.4" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$7.72</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B000T9UV8S?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;25%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://slickdeals.net/attachment/8/6/7/1/9/450x450/22237476.thumb" alt="2-Pack DEWALT 20V MAX 5 Ah Lithium Ion Batteries $101.30 + Free S/H" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">2-Pack DEWALT 20V MAX 5 Ah Lithium Ion Batteries $101.30 + Free S/H</div>
+        <div class="prices">
+          
+          <span class="price">$101.27</span>
+          
+          
+          <span class="original">$134.58</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,19.6 L1.9,25.4 L3.8,6.8 L5.8,6.0 L7.7,12.7 L9.6,14.1 L11.5,13.2 L13.5,15.3 L15.4,22.2 L17.3,11.3 L19.2,5.9 L21.2,14.2 L23.1,15.3 L25.0,21.0 L26.9,21.7 L28.8,6.6 L30.8,14.0 L32.7,10.3 L34.6,18.4 L36.5,9.7 L38.5,17.4 L40.4,13.9 L42.3,23.8 L44.2,14.9 L46.2,22.3 L48.1,20.2 L50.0,2.3 L51.9,20.7 L53.8,24.1 L55.8,22.1 L57.7,12.3 L59.6,21.3 L61.5,19.7 L63.5,6.0 L65.4,2.8 L67.3,1.2 L69.2,16.8 L71.2,18.2 L73.1,21.5 L75.0,13.8 L76.9,12.9 L78.8,26.7 L80.8,10.3 L82.7,22.6 L84.6,3.0 L86.5,8.2 L88.5,1.7 L90.4,24.4 L92.3,1.0 L94.2,23.2 L96.2,6.3 L98.1,19.3 L100.0,27.0" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$59.08</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://slickdeals.net/f/20265000-101-27-dewalt-20v-max-5-ah-lithium-ion-battery-2-pack-dcb205-2?utm_source=rss&amp;utm_content=fp&amp;utm_medium=RSS2" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Electronics">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;25%</span>
+        
+        <span class="badge-cat">Electronics</span>
+        
+        <img src="https://images-na.ssl-images-amazon.com/images/S/mediaservice.woot.com/693a47d1-5d62-42d7-bd91-010a5d1fdecc._AC_SR882,441_.png" alt="DJI Mini 5 Pro Drone with RC 2 Controller, 4 Batteries &amp; Accessories - $899.00" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">DJI Mini 5 Pro Drone with RC 2 Controller, 4 Batteries &amp; Accessories - $899.00</div>
+        <div class="prices">
+          
+          <span class="price">$899.00</span>
+          
+          
+          <span class="original">$1193.72</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,14.2 L1.9,7.8 L3.8,6.6 L5.8,12.6 L7.7,3.9 L9.6,11.2 L11.5,15.0 L13.5,16.1 L15.4,2.2 L17.3,14.1 L19.2,8.8 L21.2,3.1 L23.1,15.3 L25.0,27.0 L26.9,12.2 L28.8,17.1 L30.8,8.4 L32.7,11.6 L34.6,6.1 L36.5,9.1 L38.5,15.3 L40.4,8.7 L42.3,3.1 L44.2,3.5 L46.2,12.7 L48.1,2.1 L50.0,13.2 L51.9,15.8 L53.8,2.5 L55.8,10.6 L57.7,16.2 L59.6,4.2 L61.5,4.1 L63.5,1.0 L65.4,2.2 L67.3,6.1 L69.2,13.5 L71.2,5.6 L73.1,11.0 L75.0,7.1 L76.9,6.0 L78.8,11.4 L80.8,13.8 L82.7,13.5 L84.6,11.9 L86.5,3.4 L88.5,11.5 L90.4,13.7 L92.3,10.1 L94.2,17.2 L96.2,7.9 L98.1,10.3 L100.0,14.0" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$512.46</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://gottadeal.com/deal/479783" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Gaming">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;25%</span>
+        
+        <span class="badge-cat">Gaming</span>
+        
+        <img src="https://slickdeals.net/attachment/1/6/7/9/8/1/2/450x450/22240275.thumb" alt="271-Piece LEGO One Piece: Season 2 - Dr. Hiriluk&#39;s Hideot Set $24" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">271-Piece LEGO One Piece: Season 2 - Dr. Hiriluk&#39;s Hideot Set $24</div>
+        <div class="prices">
+          
+          <span class="price">$24.00</span>
+          
+          
+          <span class="original">$31.85</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,3.7 L1.9,9.3 L3.8,5.7 L5.8,8.5 L7.7,10.9 L9.6,2.0 L11.5,12.9 L13.5,9.0 L15.4,9.7 L17.3,1.3 L19.2,11.8 L21.2,9.1 L23.1,8.4 L25.0,7.4 L26.9,27.0 L28.8,10.8 L30.8,9.5 L32.7,4.8 L34.6,4.3 L36.5,6.2 L38.5,9.4 L40.4,11.7 L42.3,2.2 L44.2,5.9 L46.2,7.0 L48.1,1.8 L50.0,10.2 L51.9,5.4 L53.8,8.8 L55.8,8.3 L57.7,10.2 L59.6,24.6 L61.5,5.8 L63.5,6.5 L65.4,9.5 L67.3,1.0 L69.2,6.1 L71.2,12.3 L73.1,1.2 L75.0,4.1 L76.9,7.3 L78.8,7.4 L80.8,9.7 L82.7,8.2 L84.6,1.3 L86.5,8.3 L88.5,7.3 L90.4,13.1 L92.3,11.2 L94.2,11.5 L96.2,9.3 L98.1,1.0 L100.0,6.3" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$13.20</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://slickdeals.net/f/20264148-23-99-271-piece-lego-one-piece-season-2-dr-hiriluk-s-hideout-75641-2026-at-amazon?utm_source=rss&amp;utm_content=fp&amp;utm_medium=RSS2" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Electronics">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;24%</span>
+        
+        <span class="badge-cat">Electronics</span>
+        
+        <img src="https://slickdeals.net/attachment/9/4/6/5/6/8/450x450/22238529.thumb" alt="55&#34; Hisense QD5 Series Hi-QLED 4K Smart Roku TV (2026, 55QD5SR) $180 &amp; More + Free S/H" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">55&#34; Hisense QD5 Series Hi-QLED 4K Smart Roku TV (2026, 55QD5SR) $180 &amp; More + Free S/H</div>
+        <div class="prices">
+          
+          <span class="price">$180.00</span>
+          
+          
+          <span class="original">$237.38</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,4.2 L1.9,15.3 L3.8,6.5 L5.8,14.2 L7.7,3.5 L9.6,3.2 L11.5,7.6 L13.5,13.0 L15.4,4.0 L17.3,13.2 L19.2,2.0 L21.2,5.3 L23.1,7.4 L25.0,8.6 L26.9,12.9 L28.8,10.7 L30.8,4.6 L32.7,13.7 L34.6,7.5 L36.5,1.0 L38.5,8.9 L40.4,4.5 L42.3,1.7 L44.2,9.4 L46.2,9.5 L48.1,3.9 L50.0,14.8 L51.9,7.5 L53.8,3.1 L55.8,3.4 L57.7,1.2 L59.6,14.1 L61.5,24.4 L63.5,12.6 L65.4,9.6 L67.3,10.0 L69.2,10.5 L71.2,11.4 L73.1,7.0 L75.0,11.0 L76.9,4.0 L78.8,3.9 L80.8,27.0 L82.7,10.3 L84.6,8.1 L86.5,11.9 L88.5,5.8 L90.4,5.3 L92.3,4.7 L94.2,4.0 L96.2,10.0 L98.1,12.2 L100.0,10.5" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$111.18</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://slickdeals.net/f/20265435-55-hisense-qd5-series-hi-qled-4k-smart-roku-tv-2026-55qd5sr-180-more-free-s-h?utm_source=rss&amp;utm_content=fp&amp;utm_medium=RSS2" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;24%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://images.dealcatcher.com/offers/fc08d3a6-6ae5-4e5e-9108-d4611be05b21.jpeg" alt="Amazon - Etoolab Propane Torch Weed Burner with 14Ft Hose (Up to 1.8M BTU) $25.00" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Amazon - Etoolab Propane Torch Weed Burner with 14Ft Hose (Up to 1.8M BTU) $25.00</div>
+        <div class="prices">
+          
+          <span class="price">$25.00</span>
+          
+          
+          <span class="original">$32.89</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,14.1 L1.9,15.5 L3.8,9.6 L5.8,9.5 L7.7,11.2 L9.6,11.9 L11.5,14.2 L13.5,12.5 L15.4,1.0 L17.3,16.3 L19.2,7.2 L21.2,16.3 L23.1,8.4 L25.0,13.1 L26.9,15.6 L28.8,13.3 L30.8,13.0 L32.7,12.7 L34.6,3.1 L36.5,10.4 L38.5,26.8 L40.4,7.7 L42.3,8.8 L44.2,4.8 L46.2,27.0 L48.1,15.6 L50.0,15.7 L51.9,14.8 L53.8,9.5 L55.8,11.2 L57.7,2.1 L59.6,8.1 L61.5,6.2 L63.5,8.9 L65.4,4.3 L67.3,14.2 L69.2,1.1 L71.2,6.5 L73.1,23.2 L75.0,13.2 L76.9,9.2 L78.8,10.6 L80.8,6.0 L82.7,1.8 L84.6,13.7 L86.5,13.6 L88.5,11.4 L90.4,12.4 L92.3,4.6 L94.2,11.5 L96.2,2.9 L98.1,13.2 L100.0,4.1" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$16.19</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0GVHDMD4M?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;24%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://images.dealcatcher.com/offers/3b9128f5-866b-485d-b4fc-0eb25d75e585.jpeg" alt="Amazon - L LOHAS 2-Count LED Plug-In Night Lights with Dusk-to-Dawn Sensor (3000K Soft White) $4.99" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Amazon - L LOHAS 2-Count LED Plug-In Night Lights with Dusk-to-Dawn Sensor (3000K Soft White) $4.99</div>
+        <div class="prices">
+          
+          <span class="price">$4.99</span>
+          
+          
+          <span class="original">$6.53</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,6.6 L1.9,15.0 L3.8,5.1 L5.8,5.0 L7.7,5.0 L9.6,3.3 L11.5,6.2 L13.5,6.8 L15.4,1.2 L17.3,27.0 L19.2,7.0 L21.2,12.7 L23.1,13.0 L25.0,14.7 L26.9,25.4 L28.8,10.8 L30.8,12.1 L32.7,7.0 L34.6,11.1 L36.5,10.3 L38.5,6.0 L40.4,15.4 L42.3,4.4 L44.2,6.1 L46.2,4.5 L48.1,14.1 L50.0,14.9 L51.9,4.6 L53.8,12.0 L55.8,5.1 L57.7,13.5 L59.6,13.4 L61.5,5.1 L63.5,9.0 L65.4,2.9 L67.3,26.1 L69.2,3.8 L71.2,2.9 L73.1,3.3 L75.0,1.0 L76.9,15.8 L78.8,13.2 L80.8,12.8 L82.7,13.2 L84.6,3.6 L86.5,13.9 L88.5,10.3 L90.4,10.8 L92.3,9.6 L94.2,14.7 L96.2,13.3 L98.1,2.5 L100.0,2.2" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$3.18</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0BLCD42J7?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;24%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://d.dlnws.com/64599/1793438431-e345afdf-6f13-481c-8baa-d923be3d0f36-41fd9e7a3cbaa92bd90dbd59c0b37295.avif?h=250&amp;amp;w=250" alt="Walmart Resold Flash Deals: Up to 65% off + free shipping w/ $35" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Walmart Resold Flash Deals: Up to 65% off + free shipping w/ $35</div>
+        <div class="prices">
+          
+          <span class="price">$35.00</span>
+          
+          
+          <span class="original">$45.84</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,9.0 L1.9,10.4 L3.8,8.2 L5.8,10.6 L7.7,1.5 L9.6,11.8 L11.5,3.0 L13.5,4.1 L15.4,4.7 L17.3,8.8 L19.2,12.5 L21.2,7.8 L23.1,5.8 L25.0,11.9 L26.9,4.9 L28.8,12.9 L30.8,1.0 L32.7,6.1 L34.6,12.8 L36.5,6.8 L38.5,10.7 L40.4,11.8 L42.3,12.0 L44.2,9.3 L46.2,9.8 L48.1,4.9 L50.0,2.5 L51.9,9.3 L53.8,5.1 L55.8,27.0 L57.7,8.7 L59.6,9.6 L61.5,1.5 L63.5,3.1 L65.4,12.0 L67.3,6.6 L69.2,4.2 L71.2,11.0 L73.1,5.6 L75.0,12.7 L76.9,13.3 L78.8,13.7 L80.8,10.6 L82.7,10.3 L84.6,11.3 L86.5,11.0 L88.5,9.6 L90.4,13.5 L92.3,20.5 L94.2,5.7 L96.2,1.8 L98.1,13.2 L100.0,6.3" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$19.31</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.dealnews.com/Walmart-Resold-Flash-Deals-Up-to-65-off-free-shipping-w-35/22330262.html?iref=rss-hotness" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;24%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <div class="img-fallback"></div>
+        
+      </div>
+      <div class="body">
+        <div class="title">Kohl&#39;s Black Friday Early Access Sale is Live!</div>
+        <div class="prices">
+          
+          <span class="price">$307.08</span>
+          
+          
+          <span class="original">$401.71</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,4.9 L1.9,8.2 L3.8,12.5 L5.8,5.4 L7.7,3.5 L9.6,8.3 L11.5,1.6 L13.5,9.4 L15.4,7.9 L17.3,10.4 L19.2,3.3 L21.2,13.0 L23.1,11.9 L25.0,21.8 L26.9,14.0 L28.8,5.7 L30.8,2.4 L32.7,11.0 L34.6,6.9 L36.5,7.5 L38.5,13.7 L40.4,9.6 L42.3,6.1 L44.2,7.0 L46.2,8.3 L48.1,8.0 L50.0,1.7 L51.9,11.2 L53.8,27.0 L55.8,9.3 L57.7,1.4 L59.6,5.0 L61.5,2.6 L63.5,12.5 L65.4,8.3 L67.3,13.1 L69.2,14.6 L71.2,12.7 L73.1,10.3 L75.0,24.8 L76.9,11.8 L78.8,10.1 L80.8,4.6 L82.7,2.7 L84.6,8.8 L86.5,11.8 L88.5,1.0 L90.4,1.9 L92.3,9.3 L94.2,4.5 L96.2,13.5 L98.1,2.4 L100.0,13.9" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$184.00</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://gottadeal.com/deal/479613" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Electronics">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;23%</span>
+        
+        <span class="badge-cat">Electronics</span>
+        
+        <img src="https://www.techbargains.com/imagery/deals/273858.1793984094.fit_lim.size_125x125.png" alt="Quenxe ‎OL-A01-PQ35 GaN 35W Fast Charging Universal Travel Adapter w/ 3 USB-C &amp;amp; 2 USB-A $14.49" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Quenxe ‎OL-A01-PQ35 GaN 35W Fast Charging Universal Travel Adapter w/ 3 USB-C &amp;amp; 2 USB-A $14.49</div>
+        <div class="prices">
+          
+          <span class="price">$14.49</span>
+          
+          
+          <span class="original">$18.92</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,10.1 L1.9,13.5 L3.8,16.1 L5.8,17.2 L7.7,13.2 L9.6,12.9 L11.5,14.9 L13.5,2.8 L15.4,19.6 L17.3,10.6 L19.2,5.6 L21.2,12.1 L23.1,8.8 L25.0,18.6 L26.9,19.2 L28.8,15.9 L30.8,8.9 L32.7,6.3 L34.6,12.7 L36.5,4.1 L38.5,14.2 L40.4,5.8 L42.3,7.0 L44.2,1.4 L46.2,10.8 L48.1,9.2 L50.0,13.3 L51.9,9.2 L53.8,17.2 L55.8,27.0 L57.7,8.6 L59.6,2.5 L61.5,6.3 L63.5,6.6 L65.4,1.0 L67.3,17.7 L69.2,16.3 L71.2,2.2 L73.1,13.7 L75.0,8.8 L76.9,18.8 L78.8,17.8 L80.8,8.1 L82.7,10.0 L84.6,12.4 L86.5,3.8 L88.5,18.0 L90.4,4.3 L92.3,5.4 L94.2,11.2 L96.2,1.0 L98.1,5.1 L100.0,6.5" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$8.84</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0DZMHSJ5F?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;23%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://d.dlnws.com/64599/1793954302-product-trimmed.jpg?h=250&amp;amp;w=250" alt="Woot Software Clearance: Up to 50% off + free shipping w/ Prime" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Woot Software Clearance: Up to 50% off + free shipping w/ Prime</div>
+        <div class="prices">
+          
+          <span class="price">$115.00</span>
+          
+          
+          <span class="original">$150.00</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,19.0 L1.9,14.4 L3.8,22.3 L5.8,16.1 L7.7,3.1 L9.6,25.9 L11.5,4.7 L13.5,15.8 L15.4,5.8 L17.3,9.5 L19.2,10.2 L21.2,1.7 L23.1,11.7 L25.0,6.7 L26.9,6.7 L28.8,7.6 L30.8,22.3 L32.7,19.3 L34.6,17.5 L36.5,12.1 L38.5,21.8 L40.4,23.7 L42.3,19.3 L44.2,21.6 L46.2,15.1 L48.1,16.0 L50.0,22.0 L51.9,19.3 L53.8,5.3 L55.8,9.4 L57.7,12.0 L59.6,11.0 L61.5,9.4 L63.5,8.9 L65.4,7.3 L67.3,24.9 L69.2,23.1 L71.2,1.0 L73.1,14.0 L75.0,5.9 L76.9,9.4 L78.8,20.8 L80.8,24.8 L82.7,23.8 L84.6,26.2 L86.5,2.9 L88.5,8.6 L90.4,21.2 L92.3,16.5 L94.2,4.6 L96.2,27.0 L98.1,13.4 L100.0,12.6" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$64.38</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.dealnews.com/Woot-Software-Clearance-Up-to-50-off-free-shipping-w-Prime/22355404.html?iref=rss-hotness" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Home &amp; Kitchen">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;23%</span>
+        
+        <span class="badge-cat">Home &amp; Kitchen</span>
+        
+        <img src="https://www.dealsofamerica.com/images/doa-logo-green.png" alt="Leather Manager&#39;s Chair for $28.99" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Leather Manager&#39;s Chair for $28.99</div>
+        <div class="prices">
+          
+          <span class="price">$28.99</span>
+          
+          
+          <span class="original">$37.82</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,2.1 L1.9,2.6 L3.8,19.5 L5.8,1.2 L7.7,11.8 L9.6,10.4 L11.5,11.6 L13.5,19.6 L15.4,17.0 L17.3,3.5 L19.2,11.1 L21.2,5.7 L23.1,20.0 L25.0,19.3 L26.9,7.5 L28.8,4.5 L30.8,2.9 L32.7,1.4 L34.6,7.4 L36.5,6.0 L38.5,2.2 L40.4,11.5 L42.3,10.3 L44.2,26.7 L46.2,8.4 L48.1,4.2 L50.0,1.7 L51.9,18.5 L53.8,11.9 L55.8,8.4 L57.7,10.2 L59.6,17.7 L61.5,7.5 L63.5,3.9 L65.4,1.0 L67.3,14.5 L69.2,11.3 L71.2,3.9 L73.1,11.6 L75.0,17.4 L76.9,13.9 L78.8,7.3 L80.8,18.1 L82.7,13.6 L84.6,27.0 L86.5,14.5 L88.5,7.3 L90.4,2.3 L92.3,5.1 L94.2,9.5 L96.2,17.2 L98.1,3.9 L100.0,18.0" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$21.55</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="http://www.dealsofamerica.com/#Leather" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;23%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://d.dlnws.com/64599/1793029588-screen_shot_2022-08-04_at_12-43-35_pm.png?h=198&amp;amp;w=250" alt="Costco 1-Year Gold Star Membership for $65 w/ $45 Costco Shop Card + free shipping" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Costco 1-Year Gold Star Membership for $65 w/ $45 Costco Shop Card + free shipping</div>
+        <div class="prices">
+          
+          <span class="price">$65.00</span>
+          
+          
+          <span class="original">$84.61</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,21.4 L1.9,1.1 L3.8,8.9 L5.8,23.6 L7.7,21.2 L9.6,26.0 L11.5,9.1 L13.5,24.7 L15.4,12.6 L17.3,17.1 L19.2,20.2 L21.2,10.4 L23.1,18.6 L25.0,27.0 L26.9,15.2 L28.8,20.4 L30.8,26.2 L32.7,13.4 L34.6,7.9 L36.5,16.4 L38.5,1.0 L40.4,7.2 L42.3,23.1 L44.2,20.1 L46.2,2.4 L48.1,21.3 L50.0,22.6 L51.9,17.2 L53.8,9.9 L55.8,15.9 L57.7,18.2 L59.6,24.9 L61.5,2.5 L63.5,2.6 L65.4,3.1 L67.3,26.6 L69.2,13.8 L71.2,2.0 L73.1,13.0 L75.0,8.2 L76.9,14.1 L78.8,24.0 L80.8,14.0 L82.7,12.3 L84.6,24.4 L86.5,14.8 L88.5,15.4 L90.4,3.0 L92.3,14.2 L94.2,15.8 L96.2,8.3 L98.1,15.2 L100.0,10.2" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$38.16</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.dealnews.com/Costco-1-Year-Gold-Star-Membership-for-65-w-45-Costco-Shop-Card-free-shipping/22336007.html?iref=rss-hotness" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;23%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <div class="img-fallback"></div>
+        
+      </div>
+      <div class="body">
+        <div class="title">Get a $15 Promotional Credit on $50+ of Select Household Essentials at Amazon</div>
+        <div class="prices">
+          
+          <span class="price">$15.00</span>
+          
+          
+          <span class="original">$19.54</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,5.3 L1.9,1.5 L3.8,2.0 L5.8,10.6 L7.7,1.0 L9.6,11.2 L11.5,7.1 L13.5,2.6 L15.4,2.2 L17.3,2.4 L19.2,5.4 L21.2,3.0 L23.1,5.8 L25.0,13.8 L26.9,2.4 L28.8,8.5 L30.8,14.2 L32.7,12.8 L34.6,6.2 L36.5,12.4 L38.5,10.6 L40.4,4.5 L42.3,21.5 L44.2,10.5 L46.2,2.8 L48.1,5.3 L50.0,1.8 L51.9,5.1 L53.8,5.7 L55.8,13.8 L57.7,10.5 L59.6,5.8 L61.5,10.0 L63.5,7.7 L65.4,12.2 L67.3,1.2 L69.2,1.4 L71.2,10.3 L73.1,13.9 L75.0,11.2 L76.9,12.7 L78.8,12.0 L80.8,7.7 L82.7,27.0 L84.6,7.1 L86.5,3.4 L88.5,13.9 L90.4,6.0 L92.3,13.2 L94.2,14.0 L96.2,14.3 L98.1,7.9 L100.0,12.6" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$8.64</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://gottadeal.com/deal/479795" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Home &amp; Kitchen">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;23%</span>
+        
+        <span class="badge-cat">Home &amp; Kitchen</span>
+        
+        <img src="https://images.dealcatcher.com/offers/dd956e1d-d856-4b10-8ee0-5f19105a19fc.jpeg" alt="Amazon - Citrus Garbage Disposal Tablets, 24-Count Deep Clean for Kitchen Sinks &amp; Drains $7.99" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Amazon - Citrus Garbage Disposal Tablets, 24-Count Deep Clean for Kitchen Sinks &amp; Drains $7.99</div>
+        <div class="prices">
+          
+          <span class="price">$7.99</span>
+          
+          
+          <span class="original">$10.39</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,12.4 L1.9,5.2 L3.8,14.5 L5.8,2.0 L7.7,11.2 L9.6,9.1 L11.5,4.5 L13.5,1.8 L15.4,13.7 L17.3,3.6 L19.2,13.9 L21.2,14.2 L23.1,1.0 L25.0,2.7 L26.9,1.0 L28.8,1.4 L30.8,13.9 L32.7,4.7 L34.6,8.2 L36.5,1.3 L38.5,11.1 L40.4,9.6 L42.3,6.3 L44.2,3.0 L46.2,13.0 L48.1,4.4 L50.0,2.0 L51.9,14.4 L53.8,7.8 L55.8,11.2 L57.7,1.2 L59.6,11.5 L61.5,3.6 L63.5,13.9 L65.4,5.9 L67.3,4.0 L69.2,8.6 L71.2,7.2 L73.1,1.6 L75.0,1.2 L76.9,27.0 L78.8,8.5 L80.8,5.7 L82.7,8.6 L84.6,6.0 L86.5,1.1 L88.5,4.1 L90.4,9.3 L92.3,8.9 L94.2,12.3 L96.2,9.7 L98.1,7.9 L100.0,6.0" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$4.93</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0HJ21KR37?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;23%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://www.dealsofamerica.com/images/doa-logo-green.png" alt="Mustek MP72 7 inch Portable DVD Player for $49.99" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Mustek MP72 7 inch Portable DVD Player for $49.99</div>
+        <div class="prices">
+          
+          <span class="price">$49.99</span>
+          
+          
+          <span class="original">$64.99</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,3.3 L1.9,4.9 L3.8,8.6 L5.8,10.5 L7.7,6.3 L9.6,4.8 L11.5,3.8 L13.5,10.1 L15.4,8.9 L17.3,12.4 L19.2,13.9 L21.2,5.6 L23.1,7.3 L25.0,9.3 L26.9,12.1 L28.8,9.7 L30.8,13.0 L32.7,8.8 L34.6,8.5 L36.5,8.0 L38.5,5.7 L40.4,11.1 L42.3,7.8 L44.2,4.6 L46.2,4.3 L48.1,27.0 L50.0,3.0 L51.9,10.0 L53.8,5.4 L55.8,23.6 L57.7,5.9 L59.6,12.7 L61.5,7.4 L63.5,4.9 L65.4,11.7 L67.3,13.4 L69.2,10.8 L71.2,5.1 L73.1,5.4 L75.0,6.4 L76.9,9.7 L78.8,7.9 L80.8,11.1 L82.7,5.6 L84.6,1.0 L86.5,6.6 L88.5,6.8 L90.4,14.2 L92.3,12.8 L94.2,8.5 L96.2,13.2 L98.1,6.3 L100.0,7.0" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$28.28</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="http://www.dealsofamerica.com/#Mustek" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Electronics">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;23%</span>
+        
+        <span class="badge-cat">Electronics</span>
+        
+        <img src="https://slickdeals.net/attachment/1/1/7/1/5/2/7/450x450/22234389.thumb" alt="8Bitdo Ultimate 2 Bluetooth Controller for Switch/Switch 2 &amp; Windows PC (White) $52.15 + Free S&amp;H" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">8Bitdo Ultimate 2 Bluetooth Controller for Switch/Switch 2 &amp; Windows PC (White) $52.15 + Free S&amp;H</div>
+        <div class="prices">
+          
+          <span class="price">$52.17</span>
+          
+          
+          <span class="original">$67.69</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,4.6 L1.9,4.9 L3.8,1.4 L5.8,3.4 L7.7,9.4 L9.6,6.2 L11.5,8.8 L13.5,15.2 L15.4,3.6 L17.3,14.8 L19.2,8.2 L21.2,3.1 L23.1,6.7 L25.0,1.0 L26.9,9.9 L28.8,7.2 L30.8,7.4 L32.7,14.9 L34.6,9.6 L36.5,10.2 L38.5,12.5 L40.4,4.7 L42.3,6.7 L44.2,12.3 L46.2,14.1 L48.1,13.7 L50.0,7.7 L51.9,3.1 L53.8,12.1 L55.8,9.7 L57.7,4.3 L59.6,4.9 L61.5,4.0 L63.5,1.5 L65.4,8.5 L67.3,7.3 L69.2,6.0 L71.2,14.7 L73.1,5.8 L75.0,6.1 L76.9,2.8 L78.8,5.4 L80.8,9.8 L82.7,15.2 L84.6,2.9 L86.5,9.1 L88.5,14.3 L90.4,27.0 L92.3,11.1 L94.2,15.4 L96.2,10.5 L98.1,27.0 L100.0,15.4" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$30.26</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://slickdeals.net/f/20263674-53-21-8bitdo-ultimate-2-bluetooth-controller-for-switch-switch-2-windows-pc-white-at-amazon?utm_source=rss&amp;utm_content=fp&amp;utm_medium=RSS2" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;23%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <div class="img-fallback"></div>
+        
+      </div>
+      <div class="body">
+        <div class="title">Sam&#39;s Club 3-Day Weekend Doorbusters are Live!</div>
+        <div class="prices">
+          
+          <span class="price">$196.94</span>
+          
+          
+          <span class="original">$254.96</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,1.1 L1.9,2.8 L3.8,13.6 L5.8,7.4 L7.7,12.3 L9.6,12.6 L11.5,6.7 L13.5,12.1 L15.4,5.3 L17.3,26.0 L19.2,1.0 L21.2,11.4 L23.1,3.8 L25.0,2.2 L26.9,10.2 L28.8,14.3 L30.8,15.0 L32.7,27.0 L34.6,6.9 L36.5,6.0 L38.5,1.1 L40.4,14.3 L42.3,6.0 L44.2,10.3 L46.2,13.3 L48.1,10.4 L50.0,9.3 L51.9,3.3 L53.8,4.2 L55.8,5.7 L57.7,9.7 L59.6,4.7 L61.5,8.8 L63.5,5.6 L65.4,12.2 L67.3,2.8 L69.2,6.5 L71.2,12.5 L73.1,3.4 L75.0,15.8 L76.9,4.4 L78.8,1.8 L80.8,1.4 L82.7,3.1 L84.6,1.8 L86.5,7.7 L88.5,6.9 L90.4,10.2 L92.3,3.0 L94.2,11.3 L96.2,5.4 L98.1,14.4 L100.0,7.8" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$131.57</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://gottadeal.com/deal/479560" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Electronics">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;23%</span>
+        
+        <span class="badge-cat">Electronics</span>
+        
+        <img src="https://cdn.ihotoffers.com/attachments/scraped-1793887728438-818972354.jpg" alt="3-in-1 Electric Nail Clipper w/LED Display" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">3-in-1 Electric Nail Clipper w/LED Display</div>
+        <div class="prices">
+          
+          <span class="price">$42.99</span>
+          
+          
+          <span class="original">$55.68</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,11.7 L1.9,2.8 L3.8,6.1 L5.8,7.7 L7.7,14.1 L9.6,13.5 L11.5,11.4 L13.5,5.0 L15.4,5.8 L17.3,1.0 L19.2,4.6 L21.2,3.8 L23.1,3.6 L25.0,6.7 L26.9,6.5 L28.8,13.6 L30.8,12.2 L32.7,10.8 L34.6,10.1 L36.5,12.9 L38.5,14.1 L40.4,27.0 L42.3,18.6 L44.2,8.3 L46.2,8.9 L48.1,8.4 L50.0,8.0 L51.9,5.9 L53.8,13.6 L55.8,13.1 L57.7,4.6 L59.6,1.4 L61.5,3.0 L63.5,4.5 L65.4,5.2 L67.3,12.0 L69.2,13.9 L71.2,3.2 L73.1,2.5 L75.0,2.5 L76.9,11.6 L78.8,8.1 L80.8,1.1 L82.7,7.4 L84.6,1.2 L86.5,12.3 L88.5,6.7 L90.4,5.0 L92.3,3.2 L94.2,10.4 L96.2,6.1 L98.1,9.3 L100.0,12.1" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$24.02</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://ihotoffers.com/offer/3-in-1-electric-nail-clipper-wled-display" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;22%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <div class="img-fallback"></div>
+        
+      </div>
+      <div class="body">
+        <div class="title">Up to 70% off on 100s of The North Face Fashion Items for the Family at Amazon</div>
+        <div class="prices">
+          
+          <span class="price">$360.52</span>
+          
+          
+          <span class="original">$464.01</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,12.0 L1.9,2.0 L3.8,12.5 L5.8,8.1 L7.7,15.9 L9.6,7.9 L11.5,15.3 L13.5,16.0 L15.4,1.6 L17.3,6.6 L19.2,8.8 L21.2,4.1 L23.1,1.5 L25.0,11.7 L26.9,9.1 L28.8,10.3 L30.8,1.9 L32.7,1.0 L34.6,10.6 L36.5,9.2 L38.5,4.0 L40.4,23.2 L42.3,15.6 L44.2,3.6 L46.2,13.8 L48.1,7.9 L50.0,5.7 L51.9,14.4 L53.8,3.2 L55.8,16.6 L57.7,9.0 L59.6,16.1 L61.5,2.8 L63.5,4.8 L65.4,13.6 L67.3,16.1 L69.2,4.0 L71.2,3.6 L73.1,3.6 L75.0,14.2 L76.9,27.0 L78.8,3.8 L80.8,1.6 L82.7,10.4 L84.6,9.4 L86.5,3.6 L88.5,4.2 L90.4,6.5 L92.3,8.9 L94.2,5.5 L96.2,16.5 L98.1,14.1 L100.0,11.1" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$204.46</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://gottadeal.com/deal/479798" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;22%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://www.techbargains.com/imagery/deals/273860.1793987005.fit_lim.size_125x125.jpg" alt="Dremel EZ728-01 11-Piece EZ Lock Cutting Accessory Kit $15.98" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Dremel EZ728-01 11-Piece EZ Lock Cutting Accessory Kit $15.98</div>
+        <div class="prices">
+          
+          <span class="price">$15.98</span>
+          
+          
+          <span class="original">$20.54</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,13.4 L1.9,12.0 L3.8,20.3 L5.8,11.2 L7.7,18.9 L9.6,25.5 L11.5,23.7 L13.5,19.8 L15.4,26.4 L17.3,27.0 L19.2,4.8 L21.2,16.3 L23.1,11.4 L25.0,21.1 L26.9,6.0 L28.8,24.4 L30.8,14.1 L32.7,15.1 L34.6,12.7 L36.5,10.2 L38.5,1.0 L40.4,9.4 L42.3,6.3 L44.2,24.3 L46.2,18.3 L48.1,25.5 L50.0,17.1 L51.9,8.9 L53.8,17.0 L55.8,9.4 L57.7,18.4 L59.6,3.3 L61.5,21.3 L63.5,23.3 L65.4,25.5 L67.3,4.0 L69.2,14.9 L71.2,26.0 L73.1,11.7 L75.0,25.4 L76.9,13.2 L78.8,13.9 L80.8,25.3 L82.7,13.2 L84.6,19.8 L86.5,2.4 L88.5,25.3 L90.4,19.4 L92.3,11.2 L94.2,4.1 L96.2,23.6 L98.1,5.0 L100.0,2.1" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$10.21</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B09FNVQZXZ?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Electronics">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;22%</span>
+        
+        <span class="badge-cat">Electronics</span>
+        
+        <img src="https://www.techbargains.com/imagery/deals/270131.1793990057.fit_lim.size_125x125.jpg" alt="TP-Link 4K@60Hz HDMI 100W USB C Hub 5-in-1 Multiport Adapter $12.97" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">TP-Link 4K@60Hz HDMI 100W USB C Hub 5-in-1 Multiport Adapter $12.97</div>
+        <div class="prices">
+          
+          <span class="price">$12.97</span>
+          
+          
+          <span class="original">$16.66</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,2.6 L1.9,1.8 L3.8,7.6 L5.8,3.9 L7.7,5.7 L9.6,4.6 L11.5,9.3 L13.5,5.0 L15.4,3.2 L17.3,1.0 L19.2,12.8 L21.2,11.8 L23.1,5.3 L25.0,4.5 L26.9,8.2 L28.8,6.1 L30.8,12.4 L32.7,14.6 L34.6,7.2 L36.5,1.7 L38.5,16.3 L40.4,15.1 L42.3,12.2 L44.2,10.2 L46.2,9.4 L48.1,5.7 L50.0,11.6 L51.9,6.5 L53.8,8.0 L55.8,14.0 L57.7,3.9 L59.6,5.9 L61.5,5.1 L63.5,11.1 L65.4,15.6 L67.3,3.5 L69.2,5.9 L71.2,13.8 L73.1,15.0 L75.0,6.8 L76.9,13.3 L78.8,8.6 L80.8,12.4 L82.7,13.2 L84.6,12.6 L86.5,15.8 L88.5,27.0 L90.4,1.4 L92.3,15.9 L94.2,12.6 L96.2,4.2 L98.1,11.8 L100.0,13.2" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$7.59</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0DVTJY847?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Electronics">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;22%</span>
+        
+        <span class="badge-cat">Electronics</span>
+        
+        <img src="https://www.techbargains.com/imagery/deals/259556.1793978172.fit_lim.size_125x125.jpg" alt="Apple AirPods Pro 3 Active Noise Cancellation Wireless Earbuds $199" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Apple AirPods Pro 3 Active Noise Cancellation Wireless Earbuds $199</div>
+        <div class="prices">
+          
+          <span class="price">$199.00</span>
+          
+          
+          <span class="original">$255.15</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,6.9 L1.9,12.0 L3.8,13.6 L5.8,12.6 L7.7,15.1 L9.6,12.2 L11.5,12.3 L13.5,13.2 L15.4,1.6 L17.3,6.3 L19.2,4.4 L21.2,14.6 L23.1,8.0 L25.0,3.7 L26.9,10.3 L28.8,11.7 L30.8,16.0 L32.7,8.0 L34.6,9.0 L36.5,27.0 L38.5,25.7 L40.4,23.1 L42.3,9.6 L44.2,3.1 L46.2,4.5 L48.1,10.4 L50.0,1.0 L51.9,10.0 L53.8,14.1 L55.8,13.7 L57.7,9.6 L59.6,6.7 L61.5,2.1 L63.5,8.6 L65.4,5.9 L67.3,6.8 L69.2,12.5 L71.2,10.4 L73.1,9.3 L75.0,12.7 L76.9,1.4 L78.8,7.2 L80.8,2.3 L82.7,14.2 L84.6,13.4 L86.5,3.5 L88.5,7.9 L90.4,10.3 L92.3,10.6 L94.2,7.0 L96.2,4.3 L98.1,16.7 L100.0,3.3" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$115.59</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0FQFB8FMG?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Home &amp; Kitchen">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;22%</span>
+        
+        <span class="badge-cat">Home &amp; Kitchen</span>
+        
+        <div class="img-fallback"></div>
+        
+      </div>
+      <div class="body">
+        <div class="title">The Big One Solid Bath Towel or Standard/Queen Size Bed Pillow - $2.39 Each</div>
+        <div class="prices">
+          
+          <span class="price">$2.39</span>
+          
+          
+          <span class="original">$3.06</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,7.3 L1.9,1.6 L3.8,1.9 L5.8,7.5 L7.7,1.4 L9.6,2.5 L11.5,8.2 L13.5,1.0 L15.4,3.4 L17.3,4.7 L19.2,1.7 L21.2,6.4 L23.1,6.0 L25.0,9.7 L26.9,4.5 L28.8,7.3 L30.8,9.9 L32.7,3.4 L34.6,9.5 L36.5,7.1 L38.5,12.1 L40.4,10.8 L42.3,8.1 L44.2,3.6 L46.2,10.5 L48.1,13.6 L50.0,4.0 L51.9,2.3 L53.8,11.0 L55.8,6.4 L57.7,13.3 L59.6,12.0 L61.5,3.0 L63.5,5.8 L65.4,1.9 L67.3,12.1 L69.2,2.1 L71.2,9.4 L73.1,11.8 L75.0,6.0 L76.9,4.7 L78.8,8.1 L80.8,1.4 L82.7,12.3 L84.6,6.6 L86.5,3.8 L88.5,1.4 L90.4,27.0 L92.3,4.5 L94.2,10.1 L96.2,12.3 L98.1,6.4 L100.0,4.5" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$1.32</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://gottadeal.com/deal/479797" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Electronics">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;22%</span>
+        
+        <span class="badge-cat">Electronics</span>
+        
+        <div class="img-fallback"></div>
+        
+      </div>
+      <div class="body">
+        <div class="title">Save up to $250 on Apple MacBook Air Laptops with M5 Chips This Weekend Only</div>
+        <div class="prices">
+          
+          <span class="price">$250.00</span>
+          
+          
+          <span class="original">$320.23</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,17.1 L1.9,4.4 L3.8,6.3 L5.8,15.7 L7.7,13.8 L9.6,12.3 L11.5,16.1 L13.5,3.4 L15.4,14.5 L17.3,11.9 L19.2,14.5 L21.2,11.9 L23.1,1.8 L25.0,18.8 L26.9,15.0 L28.8,4.3 L30.8,8.5 L32.7,8.1 L34.6,14.8 L36.5,17.2 L38.5,13.5 L40.4,18.3 L42.3,16.0 L44.2,4.8 L46.2,2.0 L48.1,1.0 L50.0,17.8 L51.9,17.6 L53.8,14.2 L55.8,6.1 L57.7,13.8 L59.6,18.8 L61.5,1.9 L63.5,8.0 L65.4,13.7 L67.3,9.2 L69.2,7.3 L71.2,11.8 L73.1,4.0 L75.0,4.7 L76.9,8.3 L78.8,4.6 L80.8,19.0 L82.7,3.4 L84.6,1.7 L86.5,12.9 L88.5,11.4 L90.4,6.4 L92.3,27.0 L94.2,13.9 L96.2,7.7 L98.1,13.6 L100.0,10.7" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$177.47</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://gottadeal.com/deal/479762" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;22%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://images.dealcatcher.com/offers/947de966-d793-4efb-a873-16fc63820cd7.jpeg" alt="Amazon - 17.5 Inch Screw-In Metal Spiral Ground Anchors Kit $15.67" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Amazon - 17.5 Inch Screw-In Metal Spiral Ground Anchors Kit $15.67</div>
+        <div class="prices">
+          
+          <span class="price">$15.67</span>
+          
+          
+          <span class="original">$20.03</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,7.5 L1.9,8.9 L3.8,4.1 L5.8,12.3 L7.7,14.4 L9.6,12.4 L11.5,11.5 L13.5,11.7 L15.4,14.2 L17.3,1.6 L19.2,5.7 L21.2,3.1 L23.1,4.6 L25.0,7.4 L26.9,14.7 L28.8,3.6 L30.8,10.4 L32.7,8.0 L34.6,2.4 L36.5,5.6 L38.5,16.2 L40.4,17.5 L42.3,13.7 L44.2,2.1 L46.2,13.1 L48.1,1.0 L50.0,27.0 L51.9,7.0 L53.8,2.5 L55.8,26.2 L57.7,3.0 L59.6,12.1 L61.5,16.9 L63.5,4.4 L65.4,12.3 L67.3,8.1 L69.2,7.6 L71.2,6.8 L73.1,6.2 L75.0,12.7 L76.9,2.6 L78.8,3.1 L80.8,10.6 L82.7,4.3 L84.6,1.0 L86.5,8.7 L88.5,17.7 L90.4,7.9 L92.3,2.7 L94.2,4.4 L96.2,9.1 L98.1,14.4 L100.0,15.7" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$9.62</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B088WGTTWB?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Electronics">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;22%</span>
+        
+        <span class="badge-cat">Electronics</span>
+        
+        <img src="https://slickdeals.net/attachment/4/6/0/2/4/2/2/450x450/22237161.thumb" alt="INIU 10000mAh 45W USB C 3-Port Power Banks 2 for $22.50 + Free S&amp;H" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">INIU 10000mAh 45W USB C 3-Port Power Banks 2 for $22.50 + Free S&amp;H</div>
+        <div class="prices">
+          
+          <span class="price">$350.09</span>
+          
+          
+          <span class="original">$446.49</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,8.1 L1.9,7.6 L3.8,14.9 L5.8,18.3 L7.7,16.7 L9.6,11.9 L11.5,11.0 L13.5,3.3 L15.4,11.3 L17.3,5.8 L19.2,6.1 L21.2,5.2 L23.1,7.0 L25.0,12.2 L26.9,17.9 L28.8,18.4 L30.8,12.2 L32.7,16.7 L34.6,10.5 L36.5,13.1 L38.5,1.1 L40.4,10.9 L42.3,11.7 L44.2,1.8 L46.2,11.7 L48.1,5.0 L50.0,13.9 L51.9,3.9 L53.8,7.1 L55.8,1.0 L57.7,4.4 L59.6,14.2 L61.5,10.0 L63.5,9.5 L65.4,27.0 L67.3,19.3 L69.2,8.1 L71.2,6.2 L73.1,19.3 L75.0,14.3 L76.9,18.4 L78.8,15.7 L80.8,11.4 L82.7,6.4 L84.6,17.6 L86.5,12.5 L88.5,15.8 L90.4,3.9 L92.3,11.6 L94.2,9.8 L96.2,18.0 L98.1,16.0 L100.0,5.8" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$193.04</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://slickdeals.net/f/20264586-iniu-45w-10-000-mah-2-for-22-49?utm_source=rss&amp;utm_content=fp&amp;utm_medium=RSS2" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Fashion">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;21%</span>
+        
+        <span class="badge-cat">Fashion</span>
+        
+        <img src="https://images.dealcatcher.com/offers/ea362d12-5f2d-42d3-96a6-8662b00af1f2.avif" alt="Walmart - NCAA Women&#39;s White Short Sleeve Boxy Tee with Hi-Lo Hem $5.25" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Walmart - NCAA Women&#39;s White Short Sleeve Boxy Tee with Hi-Lo Hem $5.25</div>
+        <div class="prices">
+          
+          <span class="price">$5.25</span>
+          
+          
+          <span class="original">$6.68</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,4.3 L1.9,6.5 L3.8,8.6 L5.8,6.1 L7.7,16.0 L9.6,11.7 L11.5,3.6 L13.5,14.9 L15.4,12.4 L17.3,16.1 L19.2,17.2 L21.2,6.5 L23.1,3.1 L25.0,2.9 L26.9,5.3 L28.8,17.4 L30.8,4.3 L32.7,14.3 L34.6,5.0 L36.5,17.0 L38.5,13.9 L40.4,9.6 L42.3,10.3 L44.2,10.6 L46.2,9.2 L48.1,15.7 L50.0,6.3 L51.9,1.0 L53.8,7.3 L55.8,12.2 L57.7,27.0 L59.6,17.0 L61.5,5.6 L63.5,3.4 L65.4,17.3 L67.3,8.0 L69.2,8.0 L71.2,1.5 L73.1,11.3 L75.0,2.1 L76.9,3.9 L78.8,1.9 L80.8,9.2 L82.7,1.2 L84.6,10.3 L86.5,10.7 L88.5,6.8 L90.4,5.3 L92.3,17.7 L94.2,17.6 L96.2,11.0 L98.1,10.4 L100.0,9.3" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$3.33</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0CY29545B?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;21%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://images.dealcatcher.com/offers/252ed25a-6277-4b85-89d3-719149c94a04.webp" alt="Dicks Sporting Goods - Nike Women&#39;s ReactX Rejuven8 Slides (Pink Spell/Bordeaux) $24.97" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Dicks Sporting Goods - Nike Women&#39;s ReactX Rejuven8 Slides (Pink Spell/Bordeaux) $24.97</div>
+        <div class="prices">
+          
+          <span class="price">$24.97</span>
+          
+          
+          <span class="original">$31.74</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,2.0 L1.9,10.0 L3.8,3.4 L5.8,3.8 L7.7,17.0 L9.6,9.2 L11.5,1.0 L13.5,9.1 L15.4,17.6 L17.3,11.0 L19.2,18.0 L21.2,27.0 L23.1,3.6 L25.0,6.6 L26.9,10.1 L28.8,11.3 L30.8,16.8 L32.7,1.8 L34.6,1.3 L36.5,16.3 L38.5,15.1 L40.4,10.4 L42.3,6.0 L44.2,14.7 L46.2,15.2 L48.1,18.1 L50.0,1.6 L51.9,17.5 L53.8,6.5 L55.8,4.3 L57.7,16.9 L59.6,9.7 L61.5,18.1 L63.5,8.3 L65.4,26.7 L67.3,3.7 L69.2,12.2 L71.2,7.3 L73.1,10.8 L75.0,11.7 L76.9,17.5 L78.8,14.5 L80.8,16.3 L82.7,8.1 L84.6,17.6 L86.5,2.8 L88.5,12.0 L90.4,14.3 L92.3,12.8 L94.2,1.8 L96.2,16.3 L98.1,15.5 L100.0,5.8" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$15.46</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.dealcatcher.com/deals/clothing-accessories/shoes/nike-reactx-slides-452606?utm_source=rss" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;21%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://slickdeals.net/attachment/1/7/2/9/6/9/0/450x450/22239792.thumb" alt="10.5-Oz Campbell&#39;s Condensed Cream of Mushroom Soup $0.45 w/ S&amp;S" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">10.5-Oz Campbell&#39;s Condensed Cream of Mushroom Soup $0.45 w/ S&amp;S</div>
+        <div class="prices">
+          
+          <span class="price">$0.45</span>
+          
+          
+          <span class="original">$0.57</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,3.9 L1.9,6.8 L3.8,7.7 L5.8,8.7 L7.7,3.9 L9.6,4.9 L11.5,13.5 L13.5,8.7 L15.4,2.0 L17.3,3.9 L19.2,19.3 L21.2,3.9 L23.1,12.6 L25.0,4.9 L26.9,10.6 L28.8,4.9 L30.8,7.7 L32.7,10.6 L34.6,12.6 L36.5,2.0 L38.5,10.6 L40.4,10.6 L42.3,6.8 L44.2,2.9 L46.2,8.7 L48.1,3.9 L50.0,9.7 L51.9,2.9 L53.8,12.6 L55.8,12.6 L57.7,1.0 L59.6,4.9 L61.5,2.9 L63.5,7.7 L65.4,11.6 L67.3,3.9 L69.2,22.2 L71.2,4.9 L73.1,27.0 L75.0,12.6 L76.9,12.6 L78.8,10.6 L80.8,6.8 L82.7,7.7 L84.6,12.6 L86.5,4.9 L88.5,2.0 L90.4,9.7 L92.3,3.9 L94.2,23.1 L96.2,3.9 L98.1,5.8 L100.0,2.9" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$0.25</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://slickdeals.net/f/20265852-campbell-s-condensed-cream-of-mushroom-soup-10-5-oz-can-0-47-with-s-s-amazon?utm_source=rss&amp;utm_content=fp&amp;utm_medium=RSS2" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Home &amp; Kitchen">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;21%</span>
+        
+        <span class="badge-cat">Home &amp; Kitchen</span>
+        
+        <div class="img-fallback"></div>
+        
+      </div>
+      <div class="body">
+        <div class="title">Breville BES870XL Barista Express Espresso Machine</div>
+        <div class="prices">
+          
+          <span class="price">$273.92</span>
+          
+          
+          <span class="original">$346.29</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,3.2 L1.9,10.7 L3.8,14.6 L5.8,13.8 L7.7,11.2 L9.6,1.5 L11.5,2.9 L13.5,11.2 L15.4,4.1 L17.3,5.8 L19.2,5.3 L21.2,6.8 L23.1,11.4 L25.0,9.8 L26.9,14.1 L28.8,1.5 L30.8,10.6 L32.7,15.8 L34.6,9.6 L36.5,14.9 L38.5,1.1 L40.4,1.0 L42.3,7.5 L44.2,7.4 L46.2,1.5 L48.1,1.3 L50.0,4.7 L51.9,2.4 L53.8,6.1 L55.8,1.4 L57.7,27.0 L59.6,6.7 L61.5,7.3 L63.5,15.0 L65.4,1.2 L67.3,13.6 L69.2,8.3 L71.2,7.8 L73.1,10.9 L75.0,9.0 L76.9,1.4 L78.8,12.3 L80.8,9.5 L82.7,8.0 L84.6,12.5 L86.5,11.3 L88.5,12.4 L90.4,3.9 L92.3,11.5 L94.2,15.6 L96.2,15.4 L98.1,5.4 L100.0,16.0" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$173.43</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B00CH9QWOU?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Fashion">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;21%</span>
+        
+        <span class="badge-cat">Fashion</span>
+        
+        <div class="img-fallback"></div>
+        
+      </div>
+      <div class="body">
+        <div class="title">Save 25% on Eddie Bauer Apparel and Footwear for Men, Women and Kids Today</div>
+        <div class="prices">
+          
+          <span class="price">$357.99</span>
+          
+          
+          <span class="original">$451.43</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,4.6 L1.9,4.0 L3.8,11.9 L5.8,10.5 L7.7,5.0 L9.6,2.5 L11.5,12.0 L13.5,12.7 L15.4,10.3 L17.3,12.5 L19.2,5.3 L21.2,3.3 L23.1,27.0 L25.0,10.5 L26.9,9.0 L28.8,7.2 L30.8,1.8 L32.7,8.0 L34.6,9.7 L36.5,12.6 L38.5,12.3 L40.4,4.3 L42.3,9.1 L44.2,2.2 L46.2,6.5 L48.1,10.2 L50.0,5.5 L51.9,4.8 L53.8,9.6 L55.8,1.8 L57.7,12.6 L59.6,9.0 L61.5,7.3 L63.5,6.0 L65.4,12.1 L67.3,13.7 L69.2,12.2 L71.2,10.1 L73.1,2.4 L75.0,12.7 L76.9,4.0 L78.8,12.3 L80.8,8.5 L82.7,11.8 L84.6,12.4 L86.5,5.2 L88.5,1.0 L90.4,13.6 L92.3,12.5 L94.2,4.7 L96.2,13.1 L98.1,11.6 L100.0,12.7" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$201.37</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://gottadeal.com/deal/479788" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;21%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://www.techbargains.com/imagery/deals/46889.1793985694.fit_lim.size_125x125.jpg" alt="Dude Wipes Unscented  Adult Flushable Wet Wipes (12-Pack, 576-Count) $23.93" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Dude Wipes Unscented  Adult Flushable Wet Wipes (12-Pack, 576-Count) $23.93</div>
+        <div class="prices">
+          
+          <span class="price">$23.93</span>
+          
+          
+          <span class="original">$30.15</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,8.7 L1.9,19.1 L3.8,2.4 L5.8,12.5 L7.7,10.7 L9.6,13.0 L11.5,13.0 L13.5,13.6 L15.4,1.4 L17.3,2.4 L19.2,8.1 L21.2,11.2 L23.1,2.1 L25.0,7.1 L26.9,2.7 L28.8,11.1 L30.8,1.5 L32.7,13.5 L34.6,17.4 L36.5,7.1 L38.5,16.7 L40.4,19.4 L42.3,11.5 L44.2,7.3 L46.2,4.7 L48.1,5.6 L50.0,8.7 L51.9,12.9 L53.8,1.7 L55.8,11.3 L57.7,15.1 L59.6,12.2 L61.5,7.8 L63.5,9.5 L65.4,1.7 L67.3,6.3 L69.2,27.0 L71.2,1.0 L73.1,12.3 L75.0,2.5 L76.9,2.7 L78.8,13.2 L80.8,2.7 L82.7,15.0 L84.6,2.3 L86.5,8.5 L88.5,2.2 L90.4,15.1 L92.3,15.1 L94.2,17.0 L96.2,14.8 L98.1,1.8 L100.0,1.2" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$16.71</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0GHDFYJGT?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;20%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://slickdeals.net/attachment/8/6/6/3/0/450x450/22241544.thumb" alt="Barnes &amp; Noble Offer: The Criterion Collection (4K UHD, Blu-Ray &amp; DVD Editions) 50% Off + Free S&amp;H on $60+" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Barnes &amp; Noble Offer: The Criterion Collection (4K UHD, Blu-Ray &amp; DVD Editions) 50% Off + Free S&amp;H on $60+</div>
+        <div class="prices">
+          
+          <span class="price">$370.92</span>
+          
+          
+          <span class="original">$465.16</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,8.0 L1.9,3.9 L3.8,12.6 L5.8,10.2 L7.7,13.3 L9.6,13.8 L11.5,2.5 L13.5,7.0 L15.4,8.5 L17.3,9.2 L19.2,1.6 L21.2,6.3 L23.1,8.5 L25.0,15.8 L26.9,16.7 L28.8,12.6 L30.8,2.7 L32.7,11.2 L34.6,14.3 L36.5,11.4 L38.5,9.5 L40.4,8.8 L42.3,9.5 L44.2,13.5 L46.2,16.7 L48.1,13.9 L50.0,11.4 L51.9,9.9 L53.8,2.7 L55.8,12.7 L57.7,1.7 L59.6,2.2 L61.5,12.3 L63.5,5.4 L65.4,13.3 L67.3,12.5 L69.2,6.4 L71.2,12.2 L73.1,5.1 L75.0,13.6 L76.9,27.0 L78.8,9.3 L80.8,10.2 L82.7,12.1 L84.6,13.7 L86.5,1.0 L88.5,11.7 L90.4,6.2 L92.3,3.4 L94.2,1.3 L96.2,8.9 L98.1,6.8 L100.0,6.4" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$234.34</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://slickdeals.net/f/20265297-criterion-collection-semi-annual-50-off-sale-at-barnes-and-noble?utm_source=rss&amp;utm_content=fp&amp;utm_medium=RSS2" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;20%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <div class="img-fallback"></div>
+        
+      </div>
+      <div class="body">
+        <div class="title">Macy&#39;s One Day Sale: Black Friday Edition is Live!</div>
+        <div class="prices">
+          
+          <span class="price">$252.89</span>
+          
+          
+          <span class="original">$316.95</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,2.3 L1.9,8.7 L3.8,5.7 L5.8,12.8 L7.7,6.2 L9.6,5.5 L11.5,10.7 L13.5,12.2 L15.4,8.9 L17.3,4.1 L19.2,10.1 L21.2,6.3 L23.1,9.6 L25.0,4.3 L26.9,2.5 L28.8,12.8 L30.8,14.4 L32.7,5.4 L34.6,6.2 L36.5,4.4 L38.5,1.6 L40.4,13.3 L42.3,1.0 L44.2,11.0 L46.2,4.4 L48.1,10.9 L50.0,22.9 L51.9,7.7 L53.8,12.4 L55.8,2.0 L57.7,11.8 L59.6,13.5 L61.5,8.4 L63.5,4.5 L65.4,6.5 L67.3,8.9 L69.2,10.2 L71.2,6.5 L73.1,3.4 L75.0,8.1 L76.9,13.7 L78.8,3.1 L80.8,13.4 L82.7,8.9 L84.6,13.9 L86.5,11.7 L88.5,27.0 L90.4,11.2 L92.3,6.1 L94.2,12.8 L96.2,8.8 L98.1,1.1 L100.0,8.7" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$145.02</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://gottadeal.com/deal/479774" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Fashion">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;20%</span>
+        
+        <span class="badge-cat">Fashion</span>
+        
+        <div class="img-fallback"></div>
+        
+      </div>
+      <div class="body">
+        <div class="title">Citizen Men&amp;#39;s PCAT Quartz Sport Watch with Titanium Strap, Silver, 24 (Model: CB5908-57E)</div>
+        <div class="prices">
+          
+          <span class="price">$424.38</span>
+          
+          
+          <span class="original">$530.96</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,7.0 L1.9,3.0 L3.8,9.4 L5.8,11.5 L7.7,11.2 L9.6,1.3 L11.5,7.5 L13.5,13.4 L15.4,8.2 L17.3,2.1 L19.2,5.9 L21.2,6.3 L23.1,25.4 L25.0,16.0 L26.9,27.0 L28.8,7.0 L30.8,11.9 L32.7,2.7 L34.6,15.3 L36.5,3.7 L38.5,8.4 L40.4,3.3 L42.3,14.6 L44.2,11.7 L46.2,9.9 L48.1,10.6 L50.0,9.9 L51.9,5.4 L53.8,8.3 L55.8,16.7 L57.7,13.1 L59.6,9.7 L61.5,11.1 L63.5,6.2 L65.4,9.5 L67.3,12.3 L69.2,8.7 L71.2,10.9 L73.1,8.4 L75.0,14.9 L76.9,6.2 L78.8,3.4 L80.8,7.4 L82.7,12.4 L84.6,9.9 L86.5,11.2 L88.5,7.1 L90.4,14.1 L92.3,1.0 L94.2,1.4 L96.2,13.9 L98.1,7.2 L100.0,8.2" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$277.56</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://www.amazon.com/dp/B081TTYM93?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Fashion">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;20%</span>
+        
+        <span class="badge-cat">Fashion</span>
+        
+        <img src="https://cdn.shopsale.com/attachments/attachments-1793899646415-656357489.png" alt="Amazon Essentials Women&#39;s Packable Puffer Coat" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Amazon Essentials Women&#39;s Packable Puffer Coat</div>
+        <div class="prices">
+          
+          <span class="price">$12.99</span>
+          
+          
+          <span class="original">$16.25</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,1.8 L1.9,4.8 L3.8,4.8 L5.8,14.9 L7.7,14.6 L9.6,7.5 L11.5,5.0 L13.5,1.7 L15.4,12.8 L17.3,2.0 L19.2,14.0 L21.2,9.4 L23.1,1.0 L25.0,5.6 L26.9,6.7 L28.8,5.6 L30.8,3.5 L32.7,11.6 L34.6,9.4 L36.5,1.3 L38.5,2.1 L40.4,11.3 L42.3,11.7 L44.2,7.5 L46.2,10.2 L48.1,27.0 L50.0,2.7 L51.9,1.0 L53.8,5.2 L55.8,1.4 L57.7,11.6 L59.6,14.9 L61.5,12.6 L63.5,9.3 L65.4,2.2 L67.3,4.4 L69.2,9.4 L71.2,3.0 L73.1,8.3 L75.0,13.2 L76.9,4.3 L78.8,3.7 L80.8,13.9 L82.7,9.7 L84.6,7.1 L86.5,2.1 L88.5,6.0 L90.4,14.8 L92.3,5.1 L94.2,23.9 L96.2,1.3 L98.1,7.6 L100.0,8.6" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$7.74</span></span>
+          </div>
+        </div>
+        
+        
+        <a class="cta" href="https://shopsale.com/products/amazon-essentials-womens-packable-puffer-coat-650902" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <div id="no-results" style="display:none; grid-column: 1/-1; text-align:center; padding: 40px; color: var(--muted);">No deals found matching your search.</div>
+  </div>
+  
+</main>
+<footer>Auto-refreshes every 30 minutes &middot; generated by deal_finder.py</footer>
+<script>
+  // Replace a broken <img> with an empty div so a failed image never
+  // leaves a broken-image icon on the card.
+  function imgFallback(img) {
+    var d = document.createElement('div');
+    d.className = 'img-fallback';
+    img.replaceWith(d);
+  }
+
+  // Copy the promo code to the clipboard; the button confirms inline.
+  function copyCode(btn) {
+    var code = btn.dataset.code;
+    navigator.clipboard.writeText(code).then(function () {
+      btn.textContent = 'Copied!';
+      setTimeout(function () { btn.textContent = 'Copy'; }, 1500);
+    }).catch(function () {
+      btn.textContent = 'Ctrl+C: ' + code;
+      setTimeout(function () { btn.textContent = 'Copy'; }, 2500);
+    });
+  }
+
+  // Client-side filtering: search text (case-insensitive title match) AND
+  // the selected category must both match for a card to stay visible.
+  // Escape clears the search text (category choice is kept).
+  // (Auto-refresh reloads the page, which also clears the filters.)
+  (function () {
+    var searchBar = document.getElementById('searchBar');
+    var catFilter = document.getElementById('categoryFilter');
+    var noResults = document.getElementById('no-results');
+    var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+    if (!searchBar || !noResults || cards.length === 0) return;
+
+    function applyFilter() {
+      var query = searchBar.value.trim().toLowerCase();
+      var cat = catFilter ? catFilter.value : 'all';
+      var visible = 0;
+      cards.forEach(function (card) {
+        var title = card.querySelector('.title');
+        var text = title ? title.textContent.toLowerCase() : '';
+        var matchesCat = cat === 'all' || card.getAttribute('data-category') === cat;
+        var matchesText = query === '' || text.indexOf(query) !== -1;
+        var matches = matchesCat && matchesText;
+        card.style.display = matches ? 'flex' : 'none';
+        if (matches) visible++;
+      });
+      noResults.style.display = visible === 0 ? 'block' : 'none';
+    }
+
+    searchBar.addEventListener('input', applyFilter);
+    if (catFilter) catFilter.addEventListener('change', applyFilter);
+    searchBar.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        searchBar.value = '';
+        applyFilter();
+      }
+    });
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,1389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Auto-reload every 30 minutes so the catalog stays fresh. -->
+  <meta http-equiv="refresh" content="1800">
+  <title>Deal Finder — Coupon Codes</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --card: #181b22;
+      --border: #262b35;
+      --text: #e8eaf0;
+      --muted: #8b93a5;
+      --green: #22c55e;
+      --green-dark: #123d24;
+      --accent: #3b82f6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header {
+      padding: 22px clamp(16px, 4vw, 40px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header-left {
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .site-nav { display: flex; align-items: center; gap: 16px; }
+    .site-nav a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      padding: 4px 2px;
+      border-bottom: 2px solid transparent;
+    }
+    .site-nav a:hover { color: var(--text); }
+    .site-nav a.active {
+      color: var(--text);
+      font-weight: 600;
+      border-bottom-color: var(--accent);
+    }
+    #searchBar,
+    #categoryFilter {
+      background: #171a21;
+      color: var(--text);
+      border: none;
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 0.9rem;
+      font-family: inherit;
+    }
+    #searchBar { max-width: 300px; width: 100%; }
+    #categoryFilter {
+      max-width: 180px;
+      width: 100%;
+      cursor: pointer;
+    }
+    #categoryFilter option { background: #171a21; color: var(--text); }
+    #searchBar::placeholder { color: var(--muted); }
+    #searchBar:focus,
+    #categoryFilter:focus {
+      outline: none;
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+    h1 { margin: 0; font-size: 1.45rem; }
+    .meta { color: var(--muted); font-size: 0.85rem; }
+    main { padding: clamp(16px, 4vw, 40px); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 20px;
+    }
+    .card {
+      position: relative;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+    .card:hover { transform: translateY(-3px); border-color: #3a4150; }
+    .img-wrap {
+      position: relative;
+      aspect-ratio: 1 / 1;            /* square image area */
+      background: #0b0d11;            /* dark backdrop for product shots */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .img-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      padding: 14px;
+    }
+    /* Empty div that replaces a broken <img> (see imgFallback below). */
+    .img-fallback { width: 100%; height: 100%; }
+    .badge-new {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: var(--green);
+      color: #06220f;
+      font-weight: 700;
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      padding: 3px 8px;
+      border-radius: 6px;
+      z-index: 1;
+    }
+    .badge-discount {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: var(--green-dark);
+      color: #7ee2a8;
+      border: 1px solid var(--green);
+      font-weight: 700;
+      font-size: 0.8rem;
+      padding: 3px 8px;
+      border-radius: 6px;
+      z-index: 1;
+    }
+    /* Category pill, tucked just below the discount badge. */
+    .badge-cat {
+      position: absolute;
+      top: 44px;
+      right: 10px;
+      background: #20242e;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      font-weight: 600;
+      font-size: 0.6rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 2px 6px;
+      border-radius: 6px;
+      z-index: 1;
+      white-space: nowrap;
+    }
+    .body {
+      padding: 14px 16px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex: 1;
+    }
+    .title {
+      font-size: 0.95rem;
+      line-height: 1.35;
+      font-weight: 600;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;          /* clamp title to 2 lines */
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      min-height: 2.6em;
+    }
+    .prices { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    .price { font-size: 1.35rem; font-weight: 800; }
+    .original {
+      color: var(--muted);
+      text-decoration: line-through;
+      font-size: 0.9rem;
+    }
+    .badge-atl {
+      background: var(--green-dark);
+      color: #7ee2a8;
+      border: 1px solid var(--green);
+      font-weight: 700;
+      font-size: 0.7rem;
+      letter-spacing: 0.04em;
+      padding: 2px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+    .history-block {
+      background: #0b0d11;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .history-block .sparkline svg {
+      display: block;
+      width: 100%;
+      height: 28px;
+    }
+    .history-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 0.75rem;
+    }
+    .history-meta .low { color: #7ee2a8; font-weight: 600; }
+    .promo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #0b0d11;
+      border: 1px dashed #3a4150;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .promo code {
+      font-family: ui-monospace, Consolas, "Cascadia Mono", monospace;
+      font-size: 0.85rem;
+      letter-spacing: 0.05em;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .promo button {
+      background: #20242e;
+      color: var(--text);
+      border: 1px solid #3a4150;
+      border-radius: 6px;
+      padding: 4px 10px;
+      cursor: pointer;
+      font-size: 0.75rem;
+    }
+    .promo button:hover { background: #2a2f3c; }
+    .cta {
+      margin-top: auto;
+      display: block;
+      text-align: center;
+      background: var(--accent);
+      color: #fff;
+      text-decoration: none;
+      font-weight: 700;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+    .cta:hover { filter: brightness(1.12); }
+    .empty {
+      color: var(--muted);
+      text-align: center;
+      padding: 64px 0;
+      font-size: 1.05rem;
+    }
+    footer {
+      color: var(--muted);
+      text-align: center;
+      padding: 20px;
+      font-size: 0.8rem;
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="header-left">
+    <h1>&#127902; Coupon Codes</h1>
+    <span class="meta">25 deals &middot; generated 2026-11-06T19:16:29+00:00</span>
+  </div>
+  <div class="header-right">
+    <nav class="site-nav">
+      <a href="index.html">Home</a>
+      <a href="coupons.html" class="active">Coupon Codes</a>
+    </nav>
+    <input type="text" id="searchBar" placeholder="Search deals...">
+    <select id="categoryFilter" aria-label="Filter by category">
+      <option value="all">All Categories</option>
+      <option value="Electronics">Electronics</option>
+      <option value="Gaming">Gaming</option>
+      <option value="Home &amp; Kitchen">Home &amp; Kitchen</option>
+      <option value="Fashion">Fashion</option>
+      <option value="Other">Other</option>
+    </select>
+  </div>
+</header>
+<main>
+  
+  <div class="grid">
+    
+    <article class="card" data-category="Home &amp; Kitchen">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;63%</span>
+        
+        <span class="badge-cat">Home &amp; Kitchen</span>
+        
+        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_5183a9f284ddbc70eb47455cecbf0cc5.jpg" alt="Brawny Tear-A-Square 3-Ply Paper Towels, 6 Double Rolls = 12 Regular Rolls (3 Packs of 2)" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Brawny Tear-A-Square 3-Ply Paper Towels, 6 Double Rolls = 12 Regular Rolls (3 Packs of 2)</div>
+        <div class="prices">
+          
+          <span class="price">$10.58</span>
+          
+          
+          <span class="original">$28.56</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,6.0 L1.9,1.0 L3.8,8.9 L5.8,6.4 L7.7,10.7 L9.6,4.6 L11.5,13.8 L13.5,6.0 L15.4,8.0 L17.3,12.9 L19.2,9.5 L21.2,5.8 L23.1,10.1 L25.0,4.6 L26.9,2.9 L28.8,12.4 L30.8,15.2 L32.7,15.9 L34.6,3.4 L36.5,3.3 L38.5,7.5 L40.4,8.0 L42.3,4.1 L44.2,6.3 L46.2,5.8 L48.1,3.3 L50.0,5.4 L51.9,3.3 L53.8,1.9 L55.8,15.5 L57.7,15.9 L59.6,6.4 L61.5,9.1 L63.5,5.6 L65.4,5.0 L67.3,6.3 L69.2,13.0 L71.2,16.6 L73.1,12.6 L75.0,11.8 L76.9,27.0 L78.8,13.9 L80.8,22.3 L82.7,6.8 L84.6,1.6 L86.5,16.1 L88.5,2.0 L90.4,5.7 L92.3,13.6 L94.2,12.6 L96.2,10.4 L98.1,9.7 L100.0,1.8" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$5.87</span></span>
+          </div>
+        </div>
+        
+        
+        <div class="promo">
+          <code>$undefined</code>
+          <button type="button" data-code="$undefined" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0F9528CFR?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Fashion">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;62%</span>
+        
+        <span class="badge-cat">Fashion</span>
+        
+        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_d5be4f274ef971876660fb5730966320.jpg" alt="Small Wallet Women RFID Blocking Vegan Leather Bifold Compact Card Holder Wallet for Women with Zipper Coin Pocket 4 ID Window" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Small Wallet Women RFID Blocking Vegan Leather Bifold Compact Card Holder Wallet for Women with Zipper Coin Pocket 4 ID Window</div>
+        <div class="prices">
+          
+          <span class="price">$4.99</span>
+          
+          
+          <span class="original">$12.99</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,10.5 L1.9,5.3 L3.8,14.2 L5.8,13.6 L7.7,12.3 L9.6,10.6 L11.5,14.8 L13.5,5.5 L15.4,13.3 L17.3,9.7 L19.2,1.5 L21.2,1.0 L23.1,12.6 L25.0,3.2 L26.9,13.7 L28.8,4.6 L30.8,8.5 L32.7,2.2 L34.6,7.3 L36.5,3.5 L38.5,10.5 L40.4,10.3 L42.3,26.9 L44.2,1.2 L46.2,16.3 L48.1,9.2 L50.0,2.9 L51.9,15.0 L53.8,10.2 L55.8,4.9 L57.7,15.7 L59.6,9.2 L61.5,16.9 L63.5,13.2 L65.4,2.3 L67.3,6.0 L69.2,11.5 L71.2,4.4 L73.1,8.6 L75.0,12.3 L76.9,6.3 L78.8,2.7 L80.8,15.3 L82.7,27.0 L84.6,9.8 L86.5,14.0 L88.5,9.9 L90.4,8.4 L92.3,9.9 L94.2,11.9 L96.2,2.0 L98.1,15.1 L100.0,11.9" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$3.31</span></span>
+          </div>
+        </div>
+        
+        
+        <div class="promo">
+          <code>0QU9901P</code>
+          <button type="button" data-code="0QU9901P" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0D7MTYZLQ?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Fashion">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;60%</span>
+        
+        <span class="badge-cat">Fashion</span>
+        
+        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/IMG_1793988761.png" alt="adidas Kids Boys Adizero Aruku Sneakers Shoes Casual - Black&#34;,&#34;image&#34;:&#34;https://legacy.1sale.com/wp-content/uploads/2026/11/IMG_1793978859.png&#34;,&#34;imageFit&#34;:&#34;cover&#34;,&#34;imageFits&#34;:&#34;$undefined&#34;,&#34;images&#34;:[&#34;https://legacy.1sale.com/wp-content/uploads/2026/11/IMG_1793978859.png&#34;,&#34;https://legacy.1sale.com/wp-content/uploads/2026/11/IMG_1793978862.png&#34;,&#34;https://legacy.1sale.com/wp-content/uploads/2026/11/IMG_1793978865.png&#34;,&#34;https://legacy.1sale.com/wp-content/uploads/2026/11/IMG_1793978869.png&#34;,&#34;https://legacy.1sale.com/wp-content/uploads/2026/11/IMG_1793978871.png&#34;],&#34;store&#34;:&#34;Amazon&#34;,&#34;category&#34;:&#34;fashion-jewelry&#34;,&#34;categories&#34;:[&#34;fashion-jewelry&#34;],&#34;discountPercent&#34;:0,&#34;shipping&#34;:&#34;Free Shipping with Amazon Prime&#34;,&#34;soldOut&#34;:false,&#34;price&#34;:19.95,&#34;originalPrice&#34;:&#34;$undefined&#34;,&#34;dealUrl&#34;:&#34;https://link.amazon/B03zDh3na&#34;,&#34;promoCode&#34;:&#34;$undefined&#34;,&#34;promoCodeText&#34;:&#34;$undefined&#34;,&#34;postedAt&#34;:&#34;2026-11-06 00:00:00&#34;,&#34;description&#34;:&#34;Free Shipping with Amazon Prime&#34;,&#34;redemptionLabel&#34;:&#34;REDEMPTION DETAILS&#34;,&#34;redemptionDetails&#34;:&#34;Free Shipping with Amazon Prime&#34;,&#34;offerFeatures&#34;:&#34;$undefined&#34;,&#34;expiresAt&#34;:&#34;2026-11-08 00:00:00&#34;,&#34;ctaText&#34;:&#34;CLICK HERE FOR DEAL&#34;,&#34;dealType&#34;:&#34;Rev Share&#34;,&#34;slotNumber&#34;:&#34;$undefined&#34;},{" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">adidas Kids Boys Adizero Aruku Sneakers Shoes Casual - Black&#34;,&#34;image&#34;:&#34;https://legacy.1sale.com/wp-content/uploads/2026/11/IMG_1793978859.png&#34;,&#34;imageFit&#34;:&#34;cover&#34;,&#34;imageFits&#34;:&#34;$undefined&#34;,&#34;images&#34;:[&#34;https://legacy.1sale.com/wp-content/uploads/2026/11/IMG_1793978859.png&#34;,&#34;https://legacy.1sale.com/wp-content/uploads/2026/11/IMG_1793978862.png&#34;,&#34;https://legacy.1sale.com/wp-content/uploads/2026/11/IMG_1793978865.png&#34;,&#34;https://legacy.1sale.com/wp-content/uploads/2026/11/IMG_1793978869.png&#34;,&#34;https://legacy.1sale.com/wp-content/uploads/2026/11/IMG_1793978871.png&#34;],&#34;store&#34;:&#34;Amazon&#34;,&#34;category&#34;:&#34;fashion-jewelry&#34;,&#34;categories&#34;:[&#34;fashion-jewelry&#34;],&#34;discountPercent&#34;:0,&#34;shipping&#34;:&#34;Free Shipping with Amazon Prime&#34;,&#34;soldOut&#34;:false,&#34;price&#34;:19.95,&#34;originalPrice&#34;:&#34;$undefined&#34;,&#34;dealUrl&#34;:&#34;https://link.amazon/B03zDh3na&#34;,&#34;promoCode&#34;:&#34;$undefined&#34;,&#34;promoCodeText&#34;:&#34;$undefined&#34;,&#34;postedAt&#34;:&#34;2026-11-06 00:00:00&#34;,&#34;description&#34;:&#34;Free Shipping with Amazon Prime&#34;,&#34;redemptionLabel&#34;:&#34;REDEMPTION DETAILS&#34;,&#34;redemptionDetails&#34;:&#34;Free Shipping with Amazon Prime&#34;,&#34;offerFeatures&#34;:&#34;$undefined&#34;,&#34;expiresAt&#34;:&#34;2026-11-08 00:00:00&#34;,&#34;ctaText&#34;:&#34;CLICK HERE FOR DEAL&#34;,&#34;dealType&#34;:&#34;Rev Share&#34;,&#34;slotNumber&#34;:&#34;$undefined&#34;},{</div>
+        <div class="prices">
+          
+          <span class="price">$13.29</span>
+          
+          
+          <span class="original">$33.50</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,14.0 L1.9,13.1 L3.8,3.1 L5.8,14.2 L7.7,1.4 L9.6,2.3 L11.5,6.0 L13.5,10.6 L15.4,10.0 L17.3,2.5 L19.2,9.1 L21.2,7.8 L23.1,14.8 L25.0,10.8 L26.9,5.8 L28.8,5.0 L30.8,9.7 L32.7,10.9 L34.6,14.5 L36.5,4.6 L38.5,5.7 L40.4,2.2 L42.3,27.0 L44.2,15.3 L46.2,5.6 L48.1,7.6 L50.0,3.0 L51.9,6.4 L53.8,8.8 L55.8,4.4 L57.7,11.7 L59.6,5.9 L61.5,11.1 L63.5,13.0 L65.4,3.6 L67.3,14.1 L69.2,5.2 L71.2,9.4 L73.1,10.9 L75.0,6.7 L76.9,6.7 L78.8,1.7 L80.8,1.0 L82.7,3.9 L84.6,24.9 L86.5,5.8 L88.5,9.8 L90.4,9.1 L92.3,7.9 L94.2,9.0 L96.2,1.4 L98.1,12.9 L100.0,9.8" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$8.10</span></span>
+          </div>
+        </div>
+        
+        
+        <div class="promo">
+          <code>$undefined</code>
+          <button type="button" data-code="$undefined" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0HBT2SW9V?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Home &amp; Kitchen">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;59%</span>
+        
+        <span class="badge-cat">Home &amp; Kitchen</span>
+        
+        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/IMG_1793983787.png" alt="Folgers Classic Roast Instant Coffee, 8 Oz. Jar" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Folgers Classic Roast Instant Coffee, 8 Oz. Jar</div>
+        <div class="prices">
+          
+          <span class="price">$3.89</span>
+          
+          
+          <span class="original">$9.49</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,9.4 L1.9,10.0 L3.8,15.2 L5.8,10.9 L7.7,16.9 L9.6,8.8 L11.5,11.4 L13.5,7.7 L15.4,8.5 L17.3,2.7 L19.2,14.3 L21.2,13.1 L23.1,5.7 L25.0,14.5 L26.9,9.7 L28.8,7.9 L30.8,2.5 L32.7,25.6 L34.6,7.0 L36.5,14.5 L38.5,12.9 L40.4,6.2 L42.3,5.4 L44.2,5.3 L46.2,15.2 L48.1,14.5 L50.0,9.4 L51.9,9.4 L53.8,12.6 L55.8,18.0 L57.7,9.0 L59.6,3.1 L61.5,10.6 L63.5,11.1 L65.4,2.5 L67.3,8.5 L69.2,8.5 L71.2,1.0 L73.1,17.5 L75.0,13.7 L76.9,16.4 L78.8,17.2 L80.8,6.0 L82.7,12.8 L84.6,27.0 L86.5,1.8 L88.5,17.4 L90.4,11.4 L92.3,12.6 L94.2,15.7 L96.2,18.1 L98.1,16.8 L100.0,13.2" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$2.37</span></span>
+          </div>
+        </div>
+        
+        
+        <div class="promo">
+          <code>$undefined</code>
+          <button type="button" data-code="$undefined" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+        <a class="cta" href="https://www.amazon.com/dp/B01LB1J9BW?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;57%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_17ca9dcdd8e589e3bf10ef757b5e0267.jpg" alt="Fruit of the Loom Eversoft Fleece Elastic Bottom Sweatpants with Pockets, Relaxed Fit, Moisture Wicking, Breathable" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Fruit of the Loom Eversoft Fleece Elastic Bottom Sweatpants with Pockets, Relaxed Fit, Moisture Wicking, Breathable</div>
+        <div class="prices">
+          
+          <span class="price">$8.14</span>
+          
+          
+          <span class="original">$18.99</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,8.0 L1.9,12.0 L3.8,7.6 L5.8,3.9 L7.7,13.1 L9.6,9.8 L11.5,8.4 L13.5,5.6 L15.4,7.2 L17.3,20.4 L19.2,10.9 L21.2,3.5 L23.1,1.9 L25.0,6.7 L26.9,1.0 L28.8,5.2 L30.8,1.9 L32.7,4.8 L34.6,7.6 L36.5,6.9 L38.5,12.5 L40.4,11.9 L42.3,4.1 L44.2,4.4 L46.2,6.5 L48.1,27.0 L50.0,6.2 L51.9,1.7 L53.8,4.6 L55.8,9.7 L57.7,6.6 L59.6,14.8 L61.5,2.7 L63.5,7.6 L65.4,9.2 L67.3,4.3 L69.2,4.9 L71.2,15.2 L73.1,6.8 L75.0,21.8 L76.9,4.4 L78.8,2.3 L80.8,2.7 L82.7,5.6 L84.6,5.4 L86.5,2.6 L88.5,12.5 L90.4,3.8 L92.3,15.2 L94.2,6.9 L96.2,1.7 L98.1,26.8 L100.0,2.5" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$4.95</span></span>
+          </div>
+        </div>
+        
+        
+        <div class="promo">
+          <code>$undefined</code>
+          <button type="button" data-code="$undefined" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+        <a class="cta" href="https://www.amazon.com/dp/B08Z4DJP37?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;55%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_89d0cd9a025dff37edbef14fb78ea59b-1.jpg" alt="NIIMBOT D110 Mini Label Maker Machine with Tape for Home School, White" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">NIIMBOT D110 Mini Label Maker Machine with Tape for Home School, White</div>
+        <div class="prices">
+          
+          <span class="price">$7.59</span>
+          
+          
+          <span class="original">$16.99</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,12.0 L1.9,7.5 L3.8,10.1 L5.8,5.4 L7.7,1.3 L9.6,17.2 L11.5,12.0 L13.5,4.0 L15.4,2.6 L17.3,12.1 L19.2,3.0 L21.2,16.5 L23.1,10.0 L25.0,13.8 L26.9,16.3 L28.8,7.0 L30.8,10.0 L32.7,5.8 L34.6,6.5 L36.5,13.6 L38.5,18.9 L40.4,15.9 L42.3,11.7 L44.2,16.3 L46.2,11.7 L48.1,1.7 L50.0,13.4 L51.9,11.1 L53.8,4.6 L55.8,9.1 L57.7,3.3 L59.6,1.9 L61.5,3.5 L63.5,16.9 L65.4,18.0 L67.3,18.8 L69.2,2.9 L71.2,8.9 L73.1,8.2 L75.0,15.3 L76.9,27.0 L78.8,18.1 L80.8,1.0 L82.7,12.3 L84.6,2.8 L86.5,3.0 L88.5,18.8 L90.4,9.6 L92.3,13.0 L94.2,4.8 L96.2,16.6 L98.1,18.1 L100.0,15.2" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$4.34</span></span>
+          </div>
+        </div>
+        
+        
+        <div class="promo">
+          <code>JBLIBRVZ</code>
+          <button type="button" data-code="JBLIBRVZ" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0CZ6WCHGF?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;55%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_66fb962d933726ecacba42bb87b3a305.jpg" alt="Gaiatop Magnetic Hand Warmers Rechargeable 2 Pack, Pocket Penguin" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Gaiatop Magnetic Hand Warmers Rechargeable 2 Pack, Pocket Penguin</div>
+        <div class="prices">
+          
+          <span class="price">$8.99</span>
+          
+          
+          <span class="original">$19.99</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,1.3 L1.9,21.3 L3.8,11.6 L5.8,27.0 L7.7,24.9 L9.6,17.8 L11.5,2.1 L13.5,10.3 L15.4,21.2 L17.3,17.1 L19.2,14.1 L21.2,1.5 L23.1,26.8 L25.0,5.9 L26.9,1.6 L28.8,25.7 L30.8,13.6 L32.7,6.3 L34.6,10.7 L36.5,9.2 L38.5,9.7 L40.4,14.8 L42.3,5.0 L44.2,1.0 L46.2,13.2 L48.1,22.9 L50.0,6.1 L51.9,17.3 L53.8,6.6 L55.8,13.3 L57.7,14.4 L59.6,1.5 L61.5,20.3 L63.5,6.9 L65.4,26.5 L67.3,3.4 L69.2,11.6 L71.2,4.5 L73.1,4.9 L75.0,24.7 L76.9,4.7 L78.8,7.2 L80.8,13.1 L82.7,9.5 L84.6,2.0 L86.5,9.2 L88.5,18.9 L90.4,19.9 L92.3,19.4 L94.2,21.3 L96.2,13.4 L98.1,15.5 L100.0,21.2" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$6.55</span></span>
+          </div>
+        </div>
+        
+        
+        <div class="promo">
+          <code>27309URE</code>
+          <button type="button" data-code="27309URE" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0GWQWV88H?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;52%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_aad24a517658358e60f4e6d0aeff22ce.jpg" alt="2Pack Magnetic Work Light, Christmas Tool Gifts for Men Dad" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">2Pack Magnetic Work Light, Christmas Tool Gifts for Men Dad</div>
+        <div class="prices">
+          
+          <span class="price">$23.98</span>
+          
+          
+          <span class="original">$49.99</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,3.9 L1.9,13.9 L3.8,5.4 L5.8,2.6 L7.7,5.9 L9.6,1.3 L11.5,4.7 L13.5,10.1 L15.4,2.2 L17.3,2.4 L19.2,2.7 L21.2,9.3 L23.1,7.3 L25.0,15.5 L26.9,5.4 L28.8,8.2 L30.8,12.8 L32.7,13.2 L34.6,11.1 L36.5,4.5 L38.5,27.0 L40.4,8.0 L42.3,1.0 L44.2,1.0 L46.2,15.9 L48.1,14.0 L50.0,1.9 L51.9,4.1 L53.8,6.3 L55.8,4.0 L57.7,10.6 L59.6,8.1 L61.5,3.0 L63.5,10.7 L65.4,3.3 L67.3,14.8 L69.2,6.0 L71.2,9.6 L73.1,8.3 L75.0,15.4 L76.9,14.8 L78.8,1.6 L80.8,10.0 L82.7,5.3 L84.6,12.9 L86.5,9.3 L88.5,3.0 L90.4,4.2 L92.3,12.0 L94.2,8.9 L96.2,10.7 L98.1,5.4 L100.0,9.1" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$15.31</span></span>
+          </div>
+        </div>
+        
+        
+        <div class="promo">
+          <code>LHJP52BO</code>
+          <button type="button" data-code="LHJP52BO" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0FSKH5T1D?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;50%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_4c21333537e3d769839eff8db3060ff2.jpg" alt="Ekouaer 2 Pack Nightgowns for Women Button Down Sleepshirts Night Gowns" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Ekouaer 2 Pack Nightgowns for Women Button Down Sleepshirts Night Gowns</div>
+        <div class="prices">
+          
+          <span class="price">$14.99</span>
+          
+          
+          <span class="original">$29.99</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,7.5 L1.9,6.9 L3.8,7.2 L5.8,12.1 L7.7,10.8 L9.6,10.2 L11.5,6.5 L13.5,13.0 L15.4,1.9 L17.3,8.2 L19.2,12.2 L21.2,16.1 L23.1,14.3 L25.0,2.9 L26.9,2.9 L28.8,23.5 L30.8,16.3 L32.7,1.0 L34.6,13.8 L36.5,7.1 L38.5,5.6 L40.4,16.1 L42.3,27.0 L44.2,7.4 L46.2,14.2 L48.1,7.3 L50.0,12.9 L51.9,15.3 L53.8,7.6 L55.8,3.8 L57.7,1.9 L59.6,4.7 L61.5,15.6 L63.5,16.4 L65.4,17.6 L67.3,14.0 L69.2,8.4 L71.2,12.7 L73.1,10.8 L75.0,13.5 L76.9,11.8 L78.8,14.1 L80.8,8.7 L82.7,15.1 L84.6,5.5 L86.5,4.5 L88.5,2.2 L90.4,7.9 L92.3,9.1 L94.2,15.1 L96.2,5.8 L98.1,8.3 L100.0,8.2" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$9.95</span></span>
+          </div>
+        </div>
+        
+        
+        <div class="promo">
+          <code>TRY3ILYH</code>
+          <button type="button" data-code="TRY3ILYH" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0CSFWMMTK?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Home &amp; Kitchen">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;49%</span>
+        
+        <span class="badge-cat">Home &amp; Kitchen</span>
+        
+        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_40926e8c7e1b79195dbb3f8b3ef87254.jpg" alt="3-Tier Medicine Organizer - Portable Medicine Cabinet with Handle" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">3-Tier Medicine Organizer - Portable Medicine Cabinet with Handle</div>
+        <div class="prices">
+          
+          <span class="price">$17.27</span>
+          
+          
+          <span class="original">$33.99</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,10.6 L1.9,20.0 L3.8,12.9 L5.8,14.5 L7.7,12.9 L9.6,12.3 L11.5,8.1 L13.5,7.5 L15.4,11.3 L17.3,18.8 L19.2,17.4 L21.2,9.6 L23.1,6.4 L25.0,1.3 L26.9,27.0 L28.8,15.9 L30.8,12.4 L32.7,8.0 L34.6,9.3 L36.5,5.1 L38.5,7.6 L40.4,6.5 L42.3,14.0 L44.2,5.9 L46.2,17.2 L48.1,12.3 L50.0,2.4 L51.9,11.0 L53.8,19.9 L55.8,6.1 L57.7,3.5 L59.6,12.1 L61.5,17.8 L63.5,11.2 L65.4,12.7 L67.3,11.9 L69.2,7.2 L71.2,15.3 L73.1,17.5 L75.0,18.2 L76.9,16.4 L78.8,15.4 L80.8,16.8 L82.7,2.3 L84.6,3.5 L86.5,3.3 L88.5,15.8 L90.4,14.0 L92.3,1.0 L94.2,13.1 L96.2,5.2 L98.1,19.1 L100.0,16.8" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$10.32</span></span>
+          </div>
+        </div>
+        
+        
+        <div class="promo">
+          <code>$undefined</code>
+          <button type="button" data-code="$undefined" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0F8H9WKSB?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Electronics">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;49%</span>
+        
+        <span class="badge-cat">Electronics</span>
+        
+        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_db31bdfa7a56848bf51fefa4e62d5d62.jpg" alt="Duracell 2032 Lithium Battery, 6 Count, AirTag &amp; Key Fob, CR2032 3V Cell" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Duracell 2032 Lithium Battery, 6 Count, AirTag &amp; Key Fob, CR2032 3V Cell</div>
+        <div class="prices">
+          
+          <span class="price">$8.99</span>
+          
+          
+          <span class="original">$17.69</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,6.3 L1.9,6.0 L3.8,10.2 L5.8,3.8 L7.7,6.1 L9.6,10.9 L11.5,2.9 L13.5,4.2 L15.4,10.6 L17.3,13.1 L19.2,12.1 L21.2,1.6 L23.1,2.1 L25.0,14.6 L26.9,5.7 L28.8,11.1 L30.8,2.5 L32.7,1.0 L34.6,13.9 L36.5,4.3 L38.5,3.3 L40.4,6.4 L42.3,10.4 L44.2,6.9 L46.2,1.2 L48.1,23.7 L50.0,1.9 L51.9,7.3 L53.8,1.9 L55.8,3.6 L57.7,3.7 L59.6,6.9 L61.5,2.3 L63.5,6.6 L65.4,12.2 L67.3,10.7 L69.2,8.0 L71.2,3.0 L73.1,8.8 L75.0,10.7 L76.9,9.5 L78.8,8.3 L80.8,13.1 L82.7,13.8 L84.6,6.6 L86.5,27.0 L88.5,2.1 L90.4,9.1 L92.3,14.1 L94.2,13.1 L96.2,5.2 L98.1,5.0 L100.0,1.5" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$5.27</span></span>
+          </div>
+        </div>
+        
+        
+        <div class="promo">
+          <code>$undefined</code>
+          <button type="button" data-code="$undefined" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0855FD9P2?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Home &amp; Kitchen">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;48%</span>
+        
+        <span class="badge-cat">Home &amp; Kitchen</span>
+        
+        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_7bbd8406ed5919e295c765529669b790.jpg" alt="Smith &amp; Wesson Extreme Ops SWA24S Tactical Folding Knife" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Smith &amp; Wesson Extreme Ops SWA24S Tactical Folding Knife</div>
+        <div class="prices">
+          
+          <span class="price">$13.99</span>
+          
+          
+          <span class="original">$26.99</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,2.5 L1.9,16.3 L3.8,8.7 L5.8,13.9 L7.7,4.4 L9.6,7.9 L11.5,14.8 L13.5,5.0 L15.4,6.5 L17.3,6.3 L19.2,12.7 L21.2,16.7 L23.1,15.0 L25.0,14.2 L26.9,13.9 L28.8,8.6 L30.8,8.1 L32.7,27.0 L34.6,10.3 L36.5,11.2 L38.5,5.0 L40.4,4.6 L42.3,4.5 L44.2,1.4 L46.2,7.5 L48.1,13.0 L50.0,4.2 L51.9,9.1 L53.8,7.7 L55.8,10.8 L57.7,8.9 L59.6,9.6 L61.5,2.3 L63.5,11.5 L65.4,4.4 L67.3,5.1 L69.2,10.0 L71.2,16.0 L73.1,8.8 L75.0,7.4 L76.9,15.3 L78.8,10.0 L80.8,7.2 L82.7,1.0 L84.6,12.4 L86.5,4.4 L88.5,6.1 L90.4,8.7 L92.3,5.5 L94.2,3.2 L96.2,9.4 L98.1,6.0 L100.0,11.5" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$9.32</span></span>
+          </div>
+        </div>
+        
+        
+        <div class="promo">
+          <code>$undefined</code>
+          <button type="button" data-code="$undefined" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+        <a class="cta" href="https://www.amazon.com/dp/B007HAE5GQ?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;43%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/IMG_1793977914.png" alt="MAGNA-TILES Rail Racers Max 80-Piece Magnetic Construction Set, The Original Magnetic Building Brand" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">MAGNA-TILES Rail Racers Max 80-Piece Magnetic Construction Set, The Original Magnetic Building Brand</div>
+        <div class="prices">
+          
+          <span class="price">$51.59</span>
+          
+          
+          <span class="original">$89.99</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,7.6 L1.9,8.3 L3.8,1.8 L5.8,1.6 L7.7,11.3 L9.6,12.0 L11.5,9.7 L13.5,6.5 L15.4,8.8 L17.3,6.7 L19.2,4.0 L21.2,14.6 L23.1,10.0 L25.0,3.3 L26.9,8.8 L28.8,13.9 L30.8,2.1 L32.7,1.2 L34.6,1.0 L36.5,6.6 L38.5,13.6 L40.4,6.8 L42.3,2.0 L44.2,11.5 L46.2,26.6 L48.1,5.0 L50.0,12.0 L51.9,10.3 L53.8,1.0 L55.8,3.2 L57.7,10.5 L59.6,13.9 L61.5,13.9 L63.5,3.0 L65.4,2.4 L67.3,11.6 L69.2,12.7 L71.2,5.8 L73.1,6.5 L75.0,12.5 L76.9,27.0 L78.8,7.3 L80.8,2.7 L82.7,2.9 L84.6,9.4 L86.5,13.4 L88.5,9.3 L90.4,2.6 L92.3,6.0 L94.2,10.8 L96.2,15.8 L98.1,13.9 L100.0,13.7" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$32.45</span></span>
+          </div>
+        </div>
+        
+        
+        <div class="promo">
+          <code>$undefined</code>
+          <button type="button" data-code="$undefined" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0GGTKB8CW?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;42%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_24e8b01a31ef6bfcb558a3eca065e33b.jpg" alt="CRAFTSMAN 14-Piece Gold Oxide Drill Bit Set for Wood, Plastic, or Metal (CMAM2214)" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">CRAFTSMAN 14-Piece Gold Oxide Drill Bit Set for Wood, Plastic, or Metal (CMAM2214)</div>
+        <div class="prices">
+          
+          <span class="price">$9.98</span>
+          
+          
+          <span class="original">$17.07</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,11.6 L1.9,1.1 L3.8,7.4 L5.8,3.1 L7.7,8.2 L9.6,12.3 L11.5,4.7 L13.5,6.6 L15.4,4.8 L17.3,9.7 L19.2,9.1 L21.2,4.3 L23.1,6.9 L25.0,1.0 L26.9,2.1 L28.8,11.7 L30.8,13.0 L32.7,7.8 L34.6,9.8 L36.5,12.0 L38.5,2.1 L40.4,8.3 L42.3,9.9 L44.2,4.1 L46.2,11.2 L48.1,8.5 L50.0,12.7 L51.9,5.0 L53.8,5.1 L55.8,27.0 L57.7,11.1 L59.6,7.5 L61.5,1.7 L63.5,6.1 L65.4,10.4 L67.3,25.9 L69.2,6.4 L71.2,14.0 L73.1,3.8 L75.0,13.4 L76.9,7.1 L78.8,3.1 L80.8,13.0 L82.7,13.4 L84.6,2.7 L86.5,2.3 L88.5,5.2 L90.4,12.8 L92.3,10.7 L94.2,12.5 L96.2,4.4 L98.1,11.0 L100.0,8.7" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$5.77</span></span>
+          </div>
+        </div>
+        
+        
+        <div class="promo">
+          <code>$undefined</code>
+          <button type="button" data-code="$undefined" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+        <a class="cta" href="https://www.amazon.com/dp/B07KHG79Z8?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Electronics">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;40%</span>
+        
+        <span class="badge-cat">Electronics</span>
+        
+        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/IMG_1793982585.png" alt="DEWALT 20V MAX 5 Ah Lithium Ion Battery 2-Pack (DCB205-2)" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">DEWALT 20V MAX 5 Ah Lithium Ion Battery 2-Pack (DCB205-2)</div>
+        <div class="prices">
+          
+          <span class="price">$101.27</span>
+          
+          
+          <span class="original">$169.99</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,1.2 L1.9,13.3 L3.8,4.0 L5.8,5.9 L7.7,13.6 L9.6,3.1 L11.5,8.3 L13.5,3.2 L15.4,6.7 L17.3,11.3 L19.2,14.9 L21.2,10.6 L23.1,2.8 L25.0,3.9 L26.9,15.1 L28.8,12.9 L30.8,25.3 L32.7,4.0 L34.6,1.6 L36.5,10.9 L38.5,1.8 L40.4,13.2 L42.3,3.0 L44.2,27.0 L46.2,6.5 L48.1,8.7 L50.0,13.7 L51.9,3.2 L53.8,8.7 L55.8,10.3 L57.7,5.6 L59.6,7.9 L61.5,14.2 L63.5,11.2 L65.4,5.0 L67.3,12.0 L69.2,1.3 L71.2,2.1 L73.1,12.8 L75.0,1.6 L76.9,1.0 L78.8,7.8 L80.8,9.2 L82.7,15.0 L84.6,5.4 L86.5,1.3 L88.5,14.2 L90.4,9.3 L92.3,5.4 L94.2,14.1 L96.2,8.5 L98.1,2.7 L100.0,3.8" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$56.04</span></span>
+          </div>
+        </div>
+        
+        
+        <div class="promo">
+          <code>$undefined</code>
+          <button type="button" data-code="$undefined" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+        <a class="cta" href="https://www.amazon.com/dp/B00KQU1ENG?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;40%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_e84ecff8caf727535ba16a557e2cba0f.jpg" alt="32in1 T Handle Magnetic Ratchet Screwdriver Set, [Freely Combine 5+ Grip Styles] Screw driver, Ratcheting Allen Wrenches Sets, Repair Tool Kit for Computer, Bicycles, Furniture, Electronics" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">32in1 T Handle Magnetic Ratchet Screwdriver Set, [Freely Combine 5+ Grip Styles] Screw driver, Ratcheting Allen Wrenches Sets, Repair Tool Kit for Computer, Bicycles, Furniture, Electronics</div>
+        <div class="prices">
+          
+          <span class="price">$13.19</span>
+          
+          
+          <span class="original">$21.99</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,8.0 L1.9,13.7 L3.8,13.9 L5.8,3.0 L7.7,4.4 L9.6,13.6 L11.5,8.5 L13.5,5.2 L15.4,9.8 L17.3,1.0 L19.2,12.3 L21.2,21.3 L23.1,13.4 L25.0,9.0 L26.9,4.7 L28.8,1.1 L30.8,12.8 L32.7,27.0 L34.6,10.7 L36.5,3.0 L38.5,13.7 L40.4,5.5 L42.3,15.1 L44.2,12.6 L46.2,11.8 L48.1,5.6 L50.0,10.3 L51.9,11.9 L53.8,2.3 L55.8,2.3 L57.7,14.4 L59.6,1.8 L61.5,12.0 L63.5,3.4 L65.4,2.5 L67.3,14.3 L69.2,4.4 L71.2,7.7 L73.1,14.0 L75.0,10.5 L76.9,10.0 L78.8,9.2 L80.8,3.9 L82.7,3.2 L84.6,11.9 L86.5,6.3 L88.5,9.5 L90.4,13.2 L92.3,7.6 L94.2,8.8 L96.2,8.7 L98.1,2.2 L100.0,12.8" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$7.40</span></span>
+          </div>
+        </div>
+        
+        
+        <div class="promo">
+          <code>EMAK2M8E</code>
+          <button type="button" data-code="EMAK2M8E" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0GHW6W4PP?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;40%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_1fd4e909d93454daf6479f6ecc8e85c5.jpg" alt="LaserPecker LP1 Plus Mini Laser Engraver for Beginners, Pocket-Sized Laser Engraving Machine with Adjustable Stand, 360° Multi-Angle Engraving for Wood Leather Paper DIY Projects" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">LaserPecker LP1 Plus Mini Laser Engraver for Beginners, Pocket-Sized Laser Engraving Machine with Adjustable Stand, 360° Multi-Angle Engraving for Wood Leather Paper DIY Projects</div>
+        <div class="prices">
+          
+          <span class="price">$149.99</span>
+          
+          
+          <span class="original">$249.00</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,10.8 L1.9,9.0 L3.8,8.2 L5.8,13.3 L7.7,4.2 L9.6,5.8 L11.5,1.8 L13.5,12.7 L15.4,9.4 L17.3,11.5 L19.2,3.8 L21.2,1.0 L23.1,9.6 L25.0,10.5 L26.9,2.2 L28.8,11.9 L30.8,10.5 L32.7,3.3 L34.6,1.5 L36.5,3.9 L38.5,27.0 L40.4,10.0 L42.3,2.3 L44.2,9.9 L46.2,10.3 L48.1,1.0 L50.0,25.4 L51.9,2.3 L53.8,4.2 L55.8,5.9 L57.7,13.3 L59.6,8.0 L61.5,2.0 L63.5,5.7 L65.4,8.0 L67.3,2.2 L69.2,14.8 L71.2,15.0 L73.1,10.7 L75.0,16.5 L76.9,16.2 L78.8,7.0 L80.8,11.7 L82.7,11.5 L84.6,2.2 L86.5,15.5 L88.5,6.4 L90.4,5.2 L92.3,15.7 L94.2,3.3 L96.2,9.5 L98.1,15.3 L100.0,2.5" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$85.69</span></span>
+          </div>
+        </div>
+        
+        
+        <div class="promo">
+          <code>ODKC3WDT</code>
+          <button type="button" data-code="ODKC3WDT" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0FKYDFMWX?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Home &amp; Kitchen">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;39%</span>
+        
+        <span class="badge-cat">Home &amp; Kitchen</span>
+        
+        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_76b971d51649a2ff2f6316d136f117da.jpg" alt="Softsoap Antibacterial Hand Soap, Cool Splash Scent, 11.25 fl oz (6 Pack)" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Softsoap Antibacterial Hand Soap, Cool Splash Scent, 11.25 fl oz (6 Pack)</div>
+        <div class="prices">
+          
+          <span class="price">$10.89</span>
+          
+          
+          <span class="original">$17.94</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,3.5 L1.9,10.1 L3.8,12.7 L5.8,14.6 L7.7,1.8 L9.6,1.2 L11.5,1.2 L13.5,12.3 L15.4,1.0 L17.3,13.8 L19.2,8.8 L21.2,6.1 L23.1,2.3 L25.0,3.1 L26.9,3.7 L28.8,4.8 L30.8,13.1 L32.7,1.3 L34.6,4.8 L36.5,13.2 L38.5,2.8 L40.4,7.7 L42.3,2.4 L44.2,10.0 L46.2,27.0 L48.1,2.0 L50.0,15.0 L51.9,9.7 L53.8,6.9 L55.8,8.8 L57.7,8.2 L59.6,6.2 L61.5,13.5 L63.5,8.7 L65.4,14.8 L67.3,9.1 L69.2,3.4 L71.2,1.8 L73.1,2.3 L75.0,2.4 L76.9,5.5 L78.8,8.5 L80.8,11.1 L82.7,11.8 L84.6,15.2 L86.5,10.0 L88.5,10.6 L90.4,5.7 L92.3,9.9 L94.2,7.3 L96.2,9.0 L98.1,7.8 L100.0,12.2" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$6.64</span></span>
+          </div>
+        </div>
+        
+        
+        <div class="promo">
+          <code>$undefined</code>
+          <button type="button" data-code="$undefined" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+        <a class="cta" href="https://www.amazon.com/dp/B08KKCV4D5?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;38%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/IMG_1793978466.png" alt="MAGNA-TILES microMAGS Travel Set Deluxe 55-Piece Magnetic Construction Set, The Original Magnetic Building Brand" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">MAGNA-TILES microMAGS Travel Set Deluxe 55-Piece Magnetic Construction Set, The Original Magnetic Building Brand</div>
+        <div class="prices">
+          
+          <span class="price">$24.99</span>
+          
+          
+          <span class="original">$39.99</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,8.6 L1.9,8.2 L3.8,15.0 L5.8,4.4 L7.7,10.0 L9.6,13.0 L11.5,8.1 L13.5,5.6 L15.4,4.1 L17.3,5.0 L19.2,3.5 L21.2,11.6 L23.1,1.5 L25.0,5.4 L26.9,12.9 L28.8,12.4 L30.8,6.5 L32.7,15.1 L34.6,9.4 L36.5,10.0 L38.5,11.2 L40.4,9.7 L42.3,6.4 L44.2,8.7 L46.2,15.1 L48.1,1.0 L50.0,6.6 L51.9,11.7 L53.8,8.8 L55.8,7.5 L57.7,3.5 L59.6,6.8 L61.5,11.4 L63.5,5.9 L65.4,14.7 L67.3,10.9 L69.2,4.7 L71.2,23.2 L73.1,2.3 L75.0,3.7 L76.9,9.6 L78.8,2.7 L80.8,10.3 L82.7,12.2 L84.6,12.4 L86.5,11.1 L88.5,7.7 L90.4,27.0 L92.3,2.8 L94.2,14.0 L96.2,14.9 L98.1,4.9 L100.0,11.2" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$15.10</span></span>
+          </div>
+        </div>
+        
+        
+        <div class="promo">
+          <code>$undefined</code>
+          <button type="button" data-code="$undefined" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0DW97LG63?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Home &amp; Kitchen">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;36%</span>
+        
+        <span class="badge-cat">Home &amp; Kitchen</span>
+        
+        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_e7916740c2b4480e76635524975d9458.jpg" alt="Downy Calm In-Wash Laundry Scent Booster Beads, Soothing Lavender and Vanilla Bean Scent, 30.1 oz, Laundry Scent Beads, Long-Lasting Freshness" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Downy Calm In-Wash Laundry Scent Booster Beads, Soothing Lavender and Vanilla Bean Scent, 30.1 oz, Laundry Scent Beads, Long-Lasting Freshness</div>
+        <div class="prices">
+          
+          <span class="price">$12.06</span>
+          
+          
+          <span class="original">$18.99</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,9.9 L1.9,17.1 L3.8,2.4 L5.8,15.4 L7.7,15.9 L9.6,2.2 L11.5,11.7 L13.5,12.3 L15.4,5.7 L17.3,7.2 L19.2,12.1 L21.2,14.2 L23.1,7.6 L25.0,6.5 L26.9,14.5 L28.8,3.7 L30.8,16.2 L32.7,9.2 L34.6,9.1 L36.5,12.3 L38.5,1.0 L40.4,3.6 L42.3,15.3 L44.2,3.9 L46.2,9.8 L48.1,15.1 L50.0,7.3 L51.9,12.6 L53.8,6.1 L55.8,8.1 L57.7,6.3 L59.6,8.5 L61.5,6.5 L63.5,2.3 L65.4,15.4 L67.3,7.6 L69.2,18.0 L71.2,15.4 L73.1,3.7 L75.0,6.7 L76.9,17.9 L78.8,14.4 L80.8,9.9 L82.7,1.7 L84.6,13.6 L86.5,4.9 L88.5,13.3 L90.4,12.5 L92.3,8.8 L94.2,27.0 L96.2,14.4 L98.1,14.3 L100.0,1.4" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$8.39</span></span>
+          </div>
+        </div>
+        
+        
+        <div class="promo">
+          <code>$undefined</code>
+          <button type="button" data-code="$undefined" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0D5P9FWNV?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Gaming">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;34%</span>
+        
+        <span class="badge-cat">Gaming</span>
+        
+        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/IMG_1793978172.png" alt="Mattel Games Blokus Board Game for Ages 7+, 2-4 Players" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">Mattel Games Blokus Board Game for Ages 7+, 2-4 Players</div>
+        <div class="prices">
+          
+          <span class="price">$13.12</span>
+          
+          
+          <span class="original">$19.99</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,14.5 L1.9,2.7 L3.8,6.3 L5.8,7.7 L7.7,9.9 L9.6,8.0 L11.5,1.9 L13.5,12.6 L15.4,9.0 L17.3,1.5 L19.2,13.2 L21.2,13.8 L23.1,15.2 L25.0,12.6 L26.9,2.3 L28.8,6.0 L30.8,14.9 L32.7,9.8 L34.6,6.8 L36.5,9.5 L38.5,11.3 L40.4,7.0 L42.3,1.3 L44.2,1.0 L46.2,12.5 L48.1,1.2 L50.0,6.4 L51.9,1.4 L53.8,4.6 L55.8,4.3 L57.7,14.6 L59.6,5.3 L61.5,27.0 L63.5,3.9 L65.4,11.8 L67.3,6.3 L69.2,4.7 L71.2,11.8 L73.1,7.0 L75.0,1.2 L76.9,6.0 L78.8,2.3 L80.8,3.3 L82.7,1.0 L84.6,9.5 L86.5,10.5 L88.5,5.8 L90.4,13.0 L92.3,14.7 L94.2,6.0 L96.2,2.0 L98.1,1.2 L100.0,14.2" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$7.23</span></span>
+          </div>
+        </div>
+        
+        
+        <div class="promo">
+          <code>$undefined</code>
+          <button type="button" data-code="$undefined" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+        <a class="cta" href="https://www.amazon.com/dp/B00FBWBM3G?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;34%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_529d4159e48a8cce4f17c642e5bb3c27.jpg" alt="LaserPecker LP2 Laser Engraver with Roller, Portable and Handheld Laser Engraving Machine for Wood Metal Leather Acylic Engraving Laser Cutter, Suit Set with Versatile Rotary Roller" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">LaserPecker LP2 Laser Engraver with Roller, Portable and Handheld Laser Engraving Machine for Wood Metal Leather Acylic Engraving Laser Cutter, Suit Set with Versatile Rotary Roller</div>
+        <div class="prices">
+          
+          <span class="price">$524.99</span>
+          
+          
+          <span class="original">$799.00</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,1.3 L1.9,9.2 L3.8,10.9 L5.8,7.4 L7.7,12.9 L9.6,3.5 L11.5,13.7 L13.5,10.6 L15.4,10.8 L17.3,11.8 L19.2,1.9 L21.2,26.0 L23.1,13.9 L25.0,9.3 L26.9,1.9 L28.8,10.1 L30.8,4.0 L32.7,9.7 L34.6,3.0 L36.5,9.0 L38.5,12.0 L40.4,5.1 L42.3,3.9 L44.2,1.0 L46.2,6.1 L48.1,7.8 L50.0,10.9 L51.9,9.6 L53.8,3.4 L55.8,27.0 L57.7,12.9 L59.6,3.4 L61.5,9.0 L63.5,5.0 L65.4,11.8 L67.3,11.4 L69.2,13.6 L71.2,13.2 L73.1,8.2 L75.0,8.7 L76.9,10.4 L78.8,1.9 L80.8,12.3 L82.7,9.9 L84.6,11.2 L86.5,1.5 L88.5,9.2 L90.4,3.6 L92.3,2.2 L94.2,3.9 L96.2,10.4 L98.1,6.7 L100.0,10.2" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$292.68</span></span>
+          </div>
+        </div>
+        
+        
+        <div class="promo">
+          <code>ODKC3WDT</code>
+          <button type="button" data-code="ODKC3WDT" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+        <a class="cta" href="https://www.amazon.com/dp/B09TQXYLZX?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;33%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/IMG_1793981819.png" alt="PlayShifu Orboot Earth – Interactive AR World Globe for Kids: 1000+ Facts on Animals, Places &amp; Monuments | Tech-Powered STEM Learning Toy &amp; Gift, Ages 4–10" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">PlayShifu Orboot Earth – Interactive AR World Globe for Kids: 1000+ Facts on Animals, Places &amp; Monuments | Tech-Powered STEM Learning Toy &amp; Gift, Ages 4–10</div>
+        <div class="prices">
+          
+          <span class="price">$39.99</span>
+          
+          
+          <span class="original">$59.99</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,4.0 L1.9,17.9 L3.8,6.6 L5.8,10.7 L7.7,17.3 L9.6,14.6 L11.5,7.0 L13.5,4.3 L15.4,6.2 L17.3,16.3 L19.2,4.8 L21.2,9.0 L23.1,4.6 L25.0,16.8 L26.9,12.7 L28.8,8.9 L30.8,14.4 L32.7,10.9 L34.6,17.1 L36.5,15.9 L38.5,27.0 L40.4,7.2 L42.3,4.3 L44.2,16.1 L46.2,11.2 L48.1,11.9 L50.0,9.0 L51.9,1.0 L53.8,17.4 L55.8,7.6 L57.7,10.7 L59.6,14.5 L61.5,3.4 L63.5,5.3 L65.4,10.2 L67.3,1.4 L69.2,3.4 L71.2,6.6 L73.1,4.9 L75.0,8.8 L76.9,17.9 L78.8,14.6 L80.8,5.1 L82.7,12.3 L84.6,12.4 L86.5,4.4 L88.5,6.3 L90.4,7.3 L92.3,11.7 L94.2,9.5 L96.2,6.5 L98.1,11.2 L100.0,5.0" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$24.46</span></span>
+          </div>
+        </div>
+        
+        
+        <div class="promo">
+          <code>$undefined</code>
+          <button type="button" data-code="$undefined" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+        <a class="cta" href="https://www.amazon.com/dp/B075WW3JKQ?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;30%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_8f5ba06c4dc88b465515b460e03ef5a3.jpg" alt="LaserPecker LP2 Plus (Basic) 10W Diode Laser Engraver, 4000mm/s Ultra-Fast Speed 4K Precision Portable Cutting &amp; Engraving Machine for Wood, Leather, Acrylic, Coated Metal and etc." loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">LaserPecker LP2 Plus (Basic) 10W Diode Laser Engraver, 4000mm/s Ultra-Fast Speed 4K Precision Portable Cutting &amp; Engraving Machine for Wood, Leather, Acrylic, Coated Metal and etc.</div>
+        <div class="prices">
+          
+          <span class="price">$663.20</span>
+          
+          
+          <span class="original">$949.00</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,18.0 L1.9,17.8 L3.8,22.2 L5.8,24.6 L7.7,5.9 L9.6,27.0 L11.5,14.8 L13.5,21.0 L15.4,24.3 L17.3,22.3 L19.2,5.2 L21.2,21.6 L23.1,22.9 L25.0,9.4 L26.9,7.1 L28.8,5.6 L30.8,18.4 L32.7,17.5 L34.6,7.4 L36.5,22.5 L38.5,15.8 L40.4,12.5 L42.3,2.1 L44.2,23.7 L46.2,16.1 L48.1,21.4 L50.0,13.2 L51.9,16.9 L53.8,5.8 L55.8,24.8 L57.7,4.4 L59.6,21.6 L61.5,24.9 L63.5,8.2 L65.4,16.9 L67.3,7.4 L69.2,4.5 L71.2,6.1 L73.1,15.4 L75.0,9.3 L76.9,1.0 L78.8,18.3 L80.8,7.1 L82.7,12.4 L84.6,11.8 L86.5,19.1 L88.5,26.9 L90.4,25.3 L92.3,2.4 L94.2,22.0 L96.2,10.8 L98.1,22.8 L100.0,6.9" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$385.02</span></span>
+          </div>
+        </div>
+        
+        
+        <div class="promo">
+          <code>P1BL47DE</code>
+          <button type="button" data-code="P1BL47DE" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+        <a class="cta" href="https://www.amazon.com/dp/B0FNMMYYVZ?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
+        <span class="badge-discount">&minus;22%</span>
+        
+        <span class="badge-cat">Other</span>
+        
+        <img src="https://slickdeals.net/attachment/3/0/4/4/1/0/9/7/450x450/22234758.thumb" alt="5-Pk voenxe Women&#39;s Cotton Thongs (Various) from $7.15" loading="lazy" onerror="imgFallback(this)">
+        
+      </div>
+      <div class="body">
+        <div class="title">5-Pk voenxe Women&#39;s Cotton Thongs (Various) from $7.15</div>
+        <div class="prices">
+          
+          <span class="price">$7.15</span>
+          
+          
+          <span class="original">$9.20</span>
+          
+          
+        </div>
+        
+        <div class="history-block">
+          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,12.1 L1.9,5.9 L3.8,12.2 L5.8,9.6 L7.7,12.6 L9.6,5.0 L11.5,10.1 L13.5,8.8 L15.4,3.8 L17.3,7.6 L19.2,11.1 L21.2,3.9 L23.1,2.1 L25.0,14.2 L26.9,7.1 L28.8,6.0 L30.8,15.1 L32.7,5.6 L34.6,4.6 L36.5,10.1 L38.5,9.0 L40.4,7.1 L42.3,10.8 L44.2,6.5 L46.2,12.5 L48.1,14.1 L50.0,6.8 L51.9,10.1 L53.8,13.5 L55.8,6.0 L57.7,5.7 L59.6,5.8 L61.5,2.4 L63.5,10.1 L65.4,12.2 L67.3,2.1 L69.2,8.4 L71.2,9.0 L73.1,1.4 L75.0,27.0 L76.9,15.8 L78.8,1.1 L80.8,12.3 L82.7,3.1 L84.6,5.6 L86.5,9.5 L88.5,3.1 L90.4,5.3 L92.3,9.0 L94.2,12.9 L96.2,9.9 L98.1,1.0 L100.0,8.5" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">$4.56</span></span>
+          </div>
+        </div>
+        
+        
+        <div class="promo">
+          <code>S0KYZDEY</code>
+          <button type="button" data-code="S0KYZDEY" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+        <a class="cta" href="https://slickdeals.net/f/20263974-5-pack-voenxe-women-s-cotton-thongs-various-sizes-colors-from-7-13-free-shipping-w-prime?utm_source=rss&amp;utm_content=fp&amp;utm_medium=RSS2" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    
+    <div id="no-results" style="display:none; grid-column: 1/-1; text-align:center; padding: 40px; color: var(--muted);">No deals found matching your search.</div>
+  </div>
+  
+</main>
+<footer>Auto-refreshes every 30 minutes &middot; generated by deal_finder.py</footer>
+<script>
+  // Replace a broken <img> with an empty div so a failed image never
+  // leaves a broken-image icon on the card.
+  function imgFallback(img) {
+    var d = document.createElement('div');
+    d.className = 'img-fallback';
+    img.replaceWith(d);
+  }
+
+  // Copy the promo code to the clipboard; the button confirms inline.
+  function copyCode(btn) {
+    var code = btn.dataset.code;
+    navigator.clipboard.writeText(code).then(function () {
+      btn.textContent = 'Copied!';
+      setTimeout(function () { btn.textContent = 'Copy'; }, 1500);
+    }).catch(function () {
+      btn.textContent = 'Ctrl+C: ' + code;
+      setTimeout(function () { btn.textContent = 'Copy'; }, 2500);
+    });
+  }
+
+  // Client-side filtering: search text (case-insensitive title match) AND
+  // the selected category must both match for a card to stay visible.
+  // Escape clears the search text (category choice is kept).
+  // (Auto-refresh reloads the page, which also clears the filters.)
+  (function () {
+    var searchBar = document.getElementById('searchBar');
+    var catFilter = document.getElementById('categoryFilter');
+    var noResults = document.getElementById('no-results');
+    var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+    if (!searchBar || !noResults || cards.length === 0) return;
+
+    function applyFilter() {
+      var query = searchBar.value.trim().toLowerCase();
+      var cat = catFilter ? catFilter.value : 'all';
+      var visible = 0;
+      cards.forEach(function (card) {
+        var title = card.querySelector('.title');
+        var text = title ? title.textContent.toLowerCase() : '';
+        var matchesCat = cat === 'all' || card.getAttribute('data-category') === cat;
+        var matchesText = query === '' || text.indexOf(query) !== -1;
+        var matches = matchesCat && matchesText;
+        card.style.display = matches ? 'flex' : 'none';
+        if (matches) visible++;
+      });
+      noResults.style.display = visible === 0 ? 'block' : 'none';
+    }
+
+    searchBar.addEventListener('input', applyFilter);
+    if (catFilter) catFilter.addEventListener('change', applyFilter);
+    searchBar.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        searchBar.value = '';
+        applyFilter();
+      }
+    });
+  })();
+</script>
+</body>
+</html>
