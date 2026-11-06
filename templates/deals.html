@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Auto-reload every 30 minutes so the catalog stays fresh. -->
+  <meta http-equiv="refresh" content="1800">
+  <title>Deal Finder — Latest Deals</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --card: #181b22;
+      --border: #262b35;
+      --text: #e8eaf0;
+      --muted: #8b93a5;
+      --green: #22c55e;
+      --green-dark: #123d24;
+      --accent: #3b82f6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header {
+      padding: 22px clamp(16px, 4vw, 40px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header-left {
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .site-nav { display: flex; align-items: center; gap: 16px; }
+    .site-nav a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      padding: 4px 2px;
+      border-bottom: 2px solid transparent;
+    }
+    .site-nav a:hover { color: var(--text); }
+    .site-nav a.active {
+      color: var(--text);
+      font-weight: 600;
+      border-bottom-color: var(--accent);
+    }
+    #searchBar,
+    #categoryFilter {
+      background: #171a21;
+      color: var(--text);
+      border: none;
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 0.9rem;
+      font-family: inherit;
+    }
+    #searchBar { max-width: 300px; width: 100%; }
+    #categoryFilter {
+      max-width: 180px;
+      width: 100%;
+      cursor: pointer;
+    }
+    #categoryFilter option { background: #171a21; color: var(--text); }
+    #searchBar::placeholder { color: var(--muted); }
+    #searchBar:focus,
+    #categoryFilter:focus {
+      outline: none;
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+    h1 { margin: 0; font-size: 1.45rem; }
+    .meta { color: var(--muted); font-size: 0.85rem; }
+    main { padding: clamp(16px, 4vw, 40px); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 20px;
+    }
+    .card {
+      position: relative;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+    .card:hover { transform: translateY(-3px); border-color: #3a4150; }
+    .img-wrap {
+      position: relative;
+      aspect-ratio: 1 / 1;            /* square image area */
+      background: #0b0d11;            /* dark backdrop for product shots */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .img-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      padding: 14px;
+    }
+    /* Empty div that replaces a broken <img> (see imgFallback below). */
+    .img-fallback { width: 100%; height: 100%; }
+    .badge-new {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: var(--green);
+      color: #06220f;
+      font-weight: 700;
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      padding: 3px 8px;
+      border-radius: 6px;
+      z-index: 1;
+    }
+    .badge-discount {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: var(--green-dark);
+      color: #7ee2a8;
+      border: 1px solid var(--green);
+      font-weight: 700;
+      font-size: 0.8rem;
+      padding: 3px 8px;
+      border-radius: 6px;
+      z-index: 1;
+    }
+    /* Category pill, tucked just below the discount badge. */
+    .badge-cat {
+      position: absolute;
+      top: 44px;
+      right: 10px;
+      background: #20242e;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      font-weight: 600;
+      font-size: 0.6rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 2px 6px;
+      border-radius: 6px;
+      z-index: 1;
+      white-space: nowrap;
+    }
+    .body {
+      padding: 14px 16px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex: 1;
+    }
+    .title {
+      font-size: 0.95rem;
+      line-height: 1.35;
+      font-weight: 600;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;          /* clamp title to 2 lines */
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      min-height: 2.6em;
+    }
+    .prices { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    .price { font-size: 1.35rem; font-weight: 800; }
+    .original {
+      color: var(--muted);
+      text-decoration: line-through;
+      font-size: 0.9rem;
+    }
+    .badge-atl {
+      background: var(--green-dark);
+      color: #7ee2a8;
+      border: 1px solid var(--green);
+      font-weight: 700;
+      font-size: 0.7rem;
+      letter-spacing: 0.04em;
+      padding: 2px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+    .history-block {
+      background: #0b0d11;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .history-block .sparkline svg {
+      display: block;
+      width: 100%;
+      height: 28px;
+    }
+    .history-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 0.75rem;
+    }
+    .history-meta .low { color: #7ee2a8; font-weight: 600; }
+    .promo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #0b0d11;
+      border: 1px dashed #3a4150;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .promo code {
+      font-family: ui-monospace, Consolas, "Cascadia Mono", monospace;
+      font-size: 0.85rem;
+      letter-spacing: 0.05em;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .promo button {
+      background: #20242e;
+      color: var(--text);
+      border: 1px solid #3a4150;
+      border-radius: 6px;
+      padding: 4px 10px;
+      cursor: pointer;
+      font-size: 0.75rem;
+    }
+    .promo button:hover { background: #2a2f3c; }
+    .cta {
+      margin-top: auto;
+      display: block;
+      text-align: center;
+      background: var(--accent);
+      color: #fff;
+      text-decoration: none;
+      font-weight: 700;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+    .cta:hover { filter: brightness(1.12); }
+    .empty {
+      color: var(--muted);
+      text-align: center;
+      padding: 64px 0;
+      font-size: 1.05rem;
+    }
+    footer {
+      color: var(--muted);
+      text-align: center;
+      padding: 20px;
+      font-size: 0.8rem;
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="header-left">
+    <h1>&#128293; Deals</h1>
+    <span class="meta">{{ deals | length }} deal{{ '' if deals|length == 1 else 's' }} &middot; generated {{ generated_at }}</span>
+  </div>
+  <div class="header-right">
+    <nav class="site-nav">
+      <a href="index.html" class="active">Home</a>
+      <a href="coupons.html">Coupon Codes</a>
+    </nav>
+    <input type="text" id="searchBar" placeholder="Search deals...">
+    <select id="categoryFilter" aria-label="Filter by category">
+      <option value="all">All Categories</option>
+      <option value="Electronics">Electronics</option>
+      <option value="Gaming">Gaming</option>
+      <option value="Home &amp; Kitchen">Home &amp; Kitchen</option>
+      <option value="Fashion">Fashion</option>
+      <option value="Other">Other</option>
+    </select>
+  </div>
+</header>
+<main>
+  {% if deals %}
+  <div class="grid">
+    {% for d in deals %}
+    <article class="card" data-category="{{ d.category }}">
+      <div class="img-wrap">
+        {% if d.is_new %}<span class="badge-new">NEW</span>{% endif %}
+        {% if d.discount_percent %}
+        <span class="badge-discount">&minus;{{ d.discount_percent | round(0) | int }}%</span>
+        {% endif %}
+        <span class="badge-cat">{{ d.category }}</span>
+        {% if d.image_url %}
+        <img src="{{ d.image_url }}" alt="{{ d.title }}" loading="lazy" onerror="imgFallback(this)">
+        {% else %}
+        <div class="img-fallback"></div>
+        {% endif %}
+      </div>
+      <div class="body">
+        <div class="title">{{ d.title }}</div>
+        <div class="prices">
+          {% if d.price is not none %}
+          <span class="price">${{ '%.2f' | format(d.price) }}</span>
+          {% endif %}
+          {% if d.original_price and d.price is not none and d.original_price > d.price %}
+          <span class="original">${{ '%.2f' | format(d.original_price) }}</span>
+          {% endif %}
+          {% if d.is_atl %}
+          <span class="badge-atl">All-Time Low</span>
+          {% endif %}
+        </div>
+        {% if d.sparkline %}
+        <div class="history-block">
+          <div class="sparkline">{{ d.sparkline | safe }}</div>
+          <div class="history-meta">
+            <span>52-week history</span>
+            <span>Low: <span class="low">${{ '%.2f' | format(d.all_time_low) }}</span></span>
+          </div>
+        </div>
+        {% endif %}
+        {% if d.promo_code %}
+        <div class="promo">
+          <code>{{ d.promo_code }}</code>
+          <button type="button" data-code="{{ d.promo_code }}" onclick="copyCode(this)">Copy</button>
+        </div>
+        {% endif %}
+        <a class="cta" href="{{ d.affiliate_url or d.url }}" target="_blank" rel="noopener">View deal &rarr;</a>
+      </div>
+    </article>
+    {% endfor %}
+    <div id="no-results" style="display:none; grid-column: 1/-1; text-align:center; padding: 40px; color: var(--muted);">No deals found matching your search.</div>
+  </div>
+  {% else %}
+  <div class="empty">No qualifying deals this run &mdash; check back soon.</div>
+  {% endif %}
+</main>
+<footer>Auto-refreshes every 30 minutes &middot; generated by deal_finder.py</footer>
+<script>
+  // Replace a broken <img> with an empty div so a failed image never
+  // leaves a broken-image icon on the card.
+  function imgFallback(img) {
+    var d = document.createElement('div');
+    d.className = 'img-fallback';
+    img.replaceWith(d);
+  }
+
+  // Copy the promo code to the clipboard; the button confirms inline.
+  function copyCode(btn) {
+    var code = btn.dataset.code;
+    navigator.clipboard.writeText(code).then(function () {
+      btn.textContent = 'Copied!';
+      setTimeout(function () { btn.textContent = 'Copy'; }, 1500);
+    }).catch(function () {
+      btn.textContent = 'Ctrl+C: ' + code;
+      setTimeout(function () { btn.textContent = 'Copy'; }, 2500);
+    });
+  }
+
+  // Client-side filtering: search text (case-insensitive title match) AND
+  // the selected category must both match for a card to stay visible.
+  // Escape clears the search text (category choice is kept).
+  // (Auto-refresh reloads the page, which also clears the filters.)
+  (function () {
+    var searchBar = document.getElementById('searchBar');
+    var catFilter = document.getElementById('categoryFilter');
+    var noResults = document.getElementById('no-results');
+    var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+    if (!searchBar || !noResults || cards.length === 0) return;
+
+    function applyFilter() {
+      var query = searchBar.value.trim().toLowerCase();
+      var cat = catFilter ? catFilter.value : 'all';
+      var visible = 0;
+      cards.forEach(function (card) {
+        var title = card.querySelector('.title');
+        var text = title ? title.textContent.toLowerCase() : '';
+        var matchesCat = cat === 'all' || card.getAttribute('data-category') === cat;
+        var matchesText = query === '' || text.indexOf(query) !== -1;
+        var matches = matchesCat && matchesText;
+        card.style.display = matches ? 'flex' : 'none';
+        if (matches) visible++;
+      });
+      noResults.style.display = visible === 0 ? 'block' : 'none';
+    }
+
+    searchBar.addEventListener('input', applyFilter);
+    if (catFilter) catFilter.addEventListener('change', applyFilter);
+    searchBar.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        searchBar.value = '';
+        applyFilter();
+      }
+    });
+  })();
+</script>
+</body>
+</html>

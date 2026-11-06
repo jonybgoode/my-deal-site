@@ -1,0 +1,13 @@
+# Secrets — never commit
+.env
+
+# Local databases
+*.db
+*.db-wal
+*.db-shm
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/

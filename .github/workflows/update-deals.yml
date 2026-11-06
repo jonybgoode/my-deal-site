@@ -1,0 +1,69 @@
+# Zero-touch site updates: run the deal-finder pipeline in the cloud every
+# 30 minutes and publish the rendered pages to the gh-pages branch, fully
+# independent of any local machine. The Jinja templates are rendered into
+# self-contained HTML by the pipeline, so only index.html + coupons.html
+# need to be published.
+name: Auto-Update Deals
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'  # every 30 minutes (UTC)
+  workflow_dispatch: {}     # manual "Run workflow" button (Actions tab)
+
+# peaceiris/actions-gh-pages pushes to gh-pages, so the token needs write.
+permissions:
+  contents: write
+
+# Never let two pipeline runs overlap and race on the gh-pages publish.
+concurrency:
+  group: deals-update
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Playwright Chromium
+        run: playwright install chromium --with-deps
+
+      # Persist deals.db across runs so NEW badges, price history and the
+      # 14-day prune stay meaningful between cloud runs.
+      - name: Restore deal database
+        uses: actions/cache@v4
+        with:
+          path: deals.db
+          key: deals-db-${{ github.run_id }}
+          restore-keys: |
+            deals-db-
+
+      - name: Run deal-finder pipeline
+        run: python deal_finder.py --once --scrape
+
+      # Stage ONLY the final rendered HTML (deals.html is published as the
+      # site's index page).
+      - name: Stage site files
+        run: |
+          mkdir -p site
+          cp deals.html site/index.html
+          cp coupons.html site/coupons.html
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./site
+          commit_message: 'Auto-update deals (GitHub Actions) #${{ github.run_number }}'

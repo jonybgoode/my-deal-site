@@ -1,0 +1,42 @@
+{
+  "_comment": "Mock Amazon product feed. URLs and images verified against live Amazon listings on 2026-11-01 (the originally-proposed B0B4VDRH1B ASIN and three image IDs were dead and were replaced with the live-listing equivalents; prices/promos unchanged so scoring still validates). Replace fetch_affiliate() in deal_finder.py with a real API call later; keep the same output shape. Swap 'deal-finder-20' in generate_affiliate_link() for your real Amazon Associates tag before going live.",
+  "network": "AMAZON-MOCK",
+  "products": [
+    {
+      "product_name": "Anker 737 Power Bank (PowerCore 24K)",
+      "url": "https://www.amazon.com/dp/B09VPHVT2Z",
+      "merchant": "Amazon",
+      "search_price": 89.99,
+      "retail_price": 149.99,
+      "promo_code": "ANKER20",
+      "image_url": "https://m.media-amazon.com/images/I/61EUVVvuk1L._AC_SL1500_.jpg"
+    },
+    {
+      "product_name": "Sony WH-1000XM5 Wireless Noise-Canceling Headphones",
+      "url": "https://www.amazon.com/dp/B09XS7JWHH",
+      "merchant": "Amazon",
+      "search_price": 248.0,
+      "retail_price": 399.99,
+      "promo_code": null,
+      "image_url": "https://m.media-amazon.com/images/I/61O3iMlnJIL._AC_SL1500_.jpg"
+    },
+    {
+      "product_name": "Samsung 990 PRO 2TB NVMe SSD",
+      "url": "https://www.amazon.com/dp/B0BHJJ9Y77",
+      "merchant": "Amazon",
+      "search_price": 129.0,
+      "retail_price": 169.99,
+      "promo_code": "SSD10",
+      "image_url": "https://m.media-amazon.com/images/I/71OWtcxKgvL._AC_SL1500_.jpg"
+    },
+    {
+      "product_name": "Logitech MX Master 3S Wireless Mouse",
+      "url": "https://www.amazon.com/dp/B09HM94VDS",
+      "merchant": "Amazon",
+      "search_price": 94.0,
+      "retail_price": 99.99,
+      "promo_code": null,
+      "image_url": "https://m.media-amazon.com/images/I/61ni3t1ryQL._AC_SL1500_.jpg"
+    }
+  ]
+}
