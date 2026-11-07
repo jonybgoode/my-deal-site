@@ -1278,6 +1278,16 @@ def normalize_deal(raw: dict, source: str) -> Optional[Deal]:
     # carry the original feedparser entry under "entry" for extract_image().
     image_url = extract_image(raw.get("entry") or raw)
 
+    # Sanitize the promo code: scrapers sometimes leak JavaScript literal
+    # values ("$undefined", "null", ...) from the source page's payload.
+    # Anything matching the junk set (case-insensitive) is treated as "no
+    # code", which also re-routes the deal to the main deals page.
+    promo_code = raw.get("promo_code") or None
+    if promo_code is not None and str(promo_code).strip().lower() in {
+        "$undefined", "undefined", "null", "false", "none", "nan", "",
+    }:
+        promo_code = None
+
     return Deal(
         id=None,
         title=title,
@@ -1286,7 +1296,7 @@ def normalize_deal(raw: dict, source: str) -> Optional[Deal]:
         price=price,
         original_price=original,
         discount_percent=discount,
-        promo_code=raw.get("promo_code") or None,
+        promo_code=promo_code,
         image_url=image_url,
         source=source,
         found_at=now_iso(),
