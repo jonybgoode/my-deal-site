@@ -1798,7 +1798,12 @@ def render_html(
         autoescape=select_autoescape(["html"]),
     )
     template = env.get_template(template_name)
-    html_text = template.render(deals=rows, generated_at=now_iso())
+    # Human-readable timestamp, always UTC so cloud (GitHub Actions) and
+    # local runs read the same way.
+    generated_at = datetime.now(timezone.utc).strftime(
+        "%B %d, %Y at %I:%M %p UTC"
+    )
+    html_text = template.render(deals=rows, generated_at=generated_at)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     # Explicit UTF-8: never rely on the platform default (Windows cp1252).
