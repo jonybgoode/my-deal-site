@@ -181,6 +181,34 @@ DEDUP_NOISE_RE = re.compile(r"[^a-z0-9 ]+")
 # 1Sale embeds its deal list as Next.js flight JSON with these escapes.
 JSON_ESCAPES = [("\\u0026", "&"), ('\\"', '"')]
 
+# Cloudflare bypass for RSS sources flagged cloudflare=True (eDealInfo).
+# cloudscraper solves the legacy JS challenges; modern Turnstile pages fail
+# and are logged honestly ("Cloudflare bypass failed").
+try:
+    import cloudscraper
+
+    CLOUDSCRAPER_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    CLOUDSCRAPER_AVAILABLE = False
+
+# Optional deeper Playwright evasions; the manual init script below is
+# applied regardless (probed working against MyVipon's hydration gate).
+try:
+    from playwright_stealth import Stealth
+
+    PLAYWRIGHT_STEALTH_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    PLAYWRIGHT_STEALTH_AVAILABLE = False
+
+# Minimal, deterministic bot-evasion script injected into every Playwright
+# page (navigator.webdriver removal etc.).
+STEALTH_JS = """
+Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+window.chrome = window.chrome || { runtime: {} };
+Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+"""
+
 # Generic <a href="...">text</a> scraper for plain-HTML sources.
 ANCHOR_RE = re.compile(
     r"<a[^>]+href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>",
@@ -198,6 +226,9 @@ class SourceSpec:
     url: str
     # For kind="html": only anchors whose href matches this regex are kept.
     href_pattern: str = ""
+    # For kind="rss": fetch through cloudscraper to attempt a Cloudflare
+    # bypass (eDealInfo serves a "Just a moment..." 403 to plain requests).
+    cloudflare: bool = False
 
 
 # The 14-source registry (probed & verified 2026-11). Sources that fail or
@@ -205,7 +236,8 @@ class SourceSpec:
 SOURCES: list[SourceSpec] = [
     SourceSpec("slickdeals", "rss",
                "https://slickdeals.net/newsearch.php?mode=frontpage&searcharea=deals&searchin=first&rss=1&q=amazon"),
-    SourceSpec("edealinfo", "rss", "https://www.edealinfo.com/rss/latest.xml"),
+    SourceSpec("edealinfo", "rss", "https://www.edealinfo.com/rss/latest.xml",
+               cloudflare=True),
     SourceSpec("musiciansfriend", "playwright",
                "https://www.musiciansfriend.com/stupid-deal-of-the-day"),
     SourceSpec("bensbargains", "rss", "https://bensbargains.com/rss"),
@@ -580,13 +612,40 @@ def _fetch_url(url: str, timeout: Optional[int] = None) -> requests.Response:
     raise last_exc  # type: ignore[misc]
 
 
-def fetch_rss_source(name: str, url: str) -> list[dict]:
+def fetch_rss_source(
+    name: str, url: str, cloudflare: bool = False
+) -> list[dict]:
     """
     Fetch one RSS/Atom feed and return semi-normalized raw deals.
     Uses requests (for timeouts) and feeds the body to feedparser.
+    Sources flagged cloudflare=True go through cloudscraper instead.
     """
     log.info("Fetching RSS feed [%s]: %s", name, url)
-    resp = _fetch_url(url)
+    if cloudflare:
+        if not CLOUDSCRAPER_AVAILABLE:
+            raise RuntimeError(
+                "Cloudflare bypass failed (cloudscraper not installed)"
+            )
+        scraper = cloudscraper.create_scraper(
+            browser={"browser": "chrome", "platform": "windows",
+                     "mobile": False},
+        )
+        try:
+            resp = scraper.get(url, timeout=SOURCE_TIMEOUT)
+        except Exception as exc:
+            raise RuntimeError(f"Cloudflare bypass failed ({exc})")
+        body_head = resp.text[:2000].lower()
+        if (
+            resp.status_code >= 400
+            or "just a moment" in body_head
+            or "challenge-platform" in body_head
+        ):
+            raise RuntimeError(
+                "Cloudflare bypass failed (status %s challenge page "
+                "still served)" % resp.status_code
+            )
+    else:
+        resp = _fetch_url(url)
     parsed = feedparser.parse(resp.content)
 
     if not parsed.entries:
@@ -742,7 +801,20 @@ async def _scrape_playwright_sources(
         browser = await p.chromium.launch(headless=True)
         try:
             for spec in specs:
-                page = await browser.new_page(user_agent=AMAZON_UA)
+                page = await browser.new_page(
+                    user_agent=AMAZON_UA,
+                    viewport={"width": 1366, "height": 900},
+                    locale="en-US",
+                )
+                # Bot evasions on every page: playwright-stealth when
+                # installed (best effort) plus the deterministic init
+                # script, which is what unblocked MyVipon's hydration.
+                if PLAYWRIGHT_STEALTH_AVAILABLE:
+                    try:
+                        await Stealth().apply_stealth_async(page)
+                    except Exception as exc:  # API drift across versions
+                        log.debug("playwright-stealth apply failed: %s", exc)
+                await page.add_init_script(STEALTH_JS)
                 try:
                     log.info("Scraping page [%s]: %s", spec.name, spec.url)
                     await page.goto(
@@ -809,13 +881,112 @@ async def _scrape_playwright_sources(
                                 })
                         results[spec.name] = items[:MAX_ITEMS_PER_FEED]
 
+                    elif spec.name == "musiciansfriend":
+                        # Akamai-fronted: the edge serves a ~20-byte stub
+                        # (Vary: Akamai-Bot) to anything it fingerprints as
+                        # a bot. Wait for real deal content and fail loudly
+                        # with the specific reason if it never appears.
+                        try:
+                            await page.wait_for_selector(
+                                ".product-list, .deal-card, "
+                                "a[href*='/item/']",
+                                timeout=8000,
+                            )
+                        except Exception:
+                            raise RuntimeError(
+                                "Akamai bypass failed: deal content never "
+                                "rendered (bot stub served)"
+                            )
+                        raw = await page.evaluate(
+                            """() => Array.from(document.querySelectorAll(
+                                 "a[href*='/product/'], a[href*='/deal/'], "
+                                 + "a[href*='/offer/'], a[href*='/item/']"))
+                               .map(a => ({url: a.href,
+                                           text: (a.textContent || '')
+                                                  .replace(/\\s+/g, ' ').trim()}))
+                               .filter(r => r.text.length > 25
+                                            && r.text.length < 200)"""
+                        )
+                        results[spec.name] = [
+                            {
+                                "title": r["text"], "url": r["url"],
+                                "merchant": merchant_from_url(r["url"]),
+                                "price": None, "original_price": None,
+                                "promo_code": None,
+                            }
+                            for r in raw[:MAX_ITEMS_PER_FEED]
+                        ]
+
+                    elif spec.name == "myvipon":
+                        # Vue SPA behind a login-wall nudge. Hydrate, try to
+                        # dismiss the modal, then read the /product/ cards.
+                        # Card text (probed): "-72% <title> Amazon $20.99
+                        # $5.91" — original FIRST, current price LAST, the
+                        # opposite of extract_prices' heuristic.
+                        await page.wait_for_timeout(5000)
+                        for sel in ('.modal-close', 'button.close',
+                                    '[aria-label="Close"]'):
+                            loc = page.locator(sel)
+                            for i in range(min(await loc.count(), 3)):
+                                try:
+                                    if await loc.nth(i).is_visible():
+                                        await loc.nth(i).click(timeout=2000)
+                                        await page.wait_for_timeout(800)
+                                except Exception:
+                                    pass
+                        if "/login" in page.url or "/signin" in page.url:
+                            raise RuntimeError(
+                                "Login modal un-dismissible (redirected "
+                                "to %s)" % page.url
+                            )
+                        raw = await page.evaluate(
+                            """() => Array.from(document.querySelectorAll(
+                                 'a[href*="/product/"]'))
+                               .map(a => {
+                                 let el = a;
+                                 for (let i = 0; i < 4 && el.parentElement; i++) {
+                                   el = el.parentElement;
+                                   if ((el.textContent || '').trim().length > 60) break;
+                                 }
+                                 return {url: a.href,
+                                         text: (el.textContent || '')
+                                           .replace(/\\s+/g, ' ').trim()};
+                               })"""
+                        )
+                        items = []
+                        for r in raw:
+                            text = r["text"]
+                            if len(text) < 15:
+                                continue
+                            values = [
+                                v for v in
+                                (to_float(n) for n in CURRENCY_RE.findall(text))
+                                if v is not None
+                            ]
+                            price = min(values) if values else None
+                            original = max(values) if len(values) > 1 else None
+                            title = re.sub(r"^-\d+%\s*", "", text)
+                            title = CURRENCY_RE.sub(" ", title)
+                            title = re.sub(r"\bAmazon\b", " ", title,
+                                           flags=re.IGNORECASE)
+                            title = re.sub(r"\s{2,}", " ", title).strip(" ,")
+                            if title and len(title) > 8:
+                                items.append({
+                                    "title": title, "url": r["url"],
+                                    "merchant": "myvipon.com",
+                                    "price": price,
+                                    "original_price": original,
+                                    "promo_code": None,
+                                })
+                        results[spec.name] = items[:MAX_ITEMS_PER_FEED]
+
                     else:
-                        # Generic fallback (musiciansfriend / myvipon):
-                        # only anchors that point at deal-like URLs
-                        # (/product/, /deal/, /offer/) — a bare text-length
-                        # filter would pull nav & footer junk, and on this
-                        # platform /promotion/ links are category hubs
-                        # ("See More Trending Deals"), not deals.
+                        # Generic fallback: only anchors that point at
+                        # deal-like URLs (/product/, /deal/, /offer/) — a
+                        # bare text-length filter would pull nav & footer
+                        # junk, and /promotion/ links on these SPA platforms
+                        # are category hubs ("See More Trending Deals"),
+                        # not deals.
                         raw = await page.evaluate(
                             """() => Array.from(document.querySelectorAll(
                                  "a[href*='/product/'], a[href*='/deal/'], "
@@ -872,7 +1043,8 @@ def fetch_all_sources() -> list[tuple[dict, str]]:
         items: list[dict] = []
         try:
             if spec.kind == "rss":
-                items = fetch_rss_source(spec.name, spec.url)
+                items = fetch_rss_source(spec.name, spec.url,
+                                         cloudflare=spec.cloudflare)
             elif spec.kind == "html":
                 items = scrape_html_source(spec)
             elif spec.kind == "json":

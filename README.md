@@ -34,8 +34,8 @@ normalize_deal() ─> enrich_deal() ─> store_deal() ─> score_deal()
 | Source | Kind | Notes |
 |---|---|---|
 | Slickdeals | RSS | frontpage Amazon search feed |
-| eDealInfo | RSS | behind Cloudflare — often 403s; kept as an honest attempt |
-| MusiciansFriend | Playwright | Stupid Deal of the Day (Akamai may block headless) |
+| eDealInfo | RSS (cloudscraper) | Cloudflare bypass attempt via cloudscraper; Turnstile challenges still fail → `Cloudflare bypass failed` WARNING |
+| MusiciansFriend | Playwright + stealth | Stupid Deal of the Day; Akamai serves a ~20-byte bot stub — waits for deal selectors, WARNINGs `Akamai bypass failed` when blocked |
 | BensBargains | RSS | |
 | DealNews | RSS | `?rss=1&sort=hotness` |
 | DealsOfAmerica | RSS | small feed (a few entries) |
@@ -46,7 +46,7 @@ normalize_deal() ─> enrich_deal() ─> store_deal() ─> score_deal()
 | iHotOffers | Playwright | `/offer/` cards |
 | ShopSale | Playwright | `/products/` cards |
 | TechBargains | RSS | |
-| MyVipon | Playwright | deals behind login — often 0 items |
+| MyVipon | Playwright + stealth | login modal auto-dismissed, `/product/` cards parsed from the hydrated Vue DOM |
 
 Each source gets a 15 s budget (`SOURCE_TIMEOUT`); a dead or slow source
 logs a WARNING and the run continues. Add extra RSS feeds via
@@ -179,6 +179,17 @@ The HTML page is a fully self-contained static file — just open it:
 - **Local server (nicer):** `python -m http.server 8000` from the project
   directory, then visit `http://localhost:8000/deals.html`. The page
   auto-reloads itself every 30 minutes via `<meta http-equiv="refresh">`.
+
+**Browsing features (client-side, no server needed):**
+
+- **Pagination:** the first 24 cards load; a **Load More** button at the
+  bottom of the grid reveals the next 24 (and so on). The button hides
+  when everything is visible.
+- **Search + category filter:** typing in the search box or changing the
+  category resets the view to the first 24 *matches*; `Escape` clears the
+  search text.
+- Jump-to-top / jump-to-bottom buttons appear fixed at the bottom-right
+  once the page is scrollable.
 
 ## Deploying to GitHub Pages
 

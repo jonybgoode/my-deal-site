@@ -262,6 +262,24 @@
       padding: 64px 0;
       font-size: 1.05rem;
     }
+    .load-more-wrap {
+      display: flex;
+      justify-content: center;
+      padding: 26px 0 8px;
+    }
+    #loadMoreBtn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 34px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      min-width: 220px;
+    }
+    #loadMoreBtn:hover { filter: brightness(1.12); }
     footer {
       color: var(--muted);
       text-align: center;
@@ -369,6 +387,9 @@
     {% endfor %}
     <div id="no-results" style="display:none; grid-column: 1/-1; text-align:center; padding: 40px; color: var(--muted);">No deals found matching your search.</div>
   </div>
+  <div class="load-more-wrap">
+    <button type="button" id="loadMoreBtn" style="display:none;">Load More</button>
+  </div>
   {% else %}
   <div class="empty">No qualifying coupons this run &mdash; check back soon.</div>
   {% endif %}
@@ -399,41 +420,68 @@
     });
   }
 
+  // Pagination: cards are revealed in batches of 24 via "Load More".
+  const CARDS_PER_PAGE = 24;
+  let currentlyVisible = CARDS_PER_PAGE;
+
   // Client-side filtering: search text (case-insensitive title match) AND
   // the selected category must both match for a card to stay visible.
+  // Matching cards beyond `currentlyVisible` stay hidden until "Load More"
+  // is clicked; any filter change resets pagination to the first page.
   // Escape clears the search text (category choice is kept).
   // (Auto-refresh reloads the page, which also clears the filters.)
   (function () {
     var searchBar = document.getElementById('searchBar');
     var catFilter = document.getElementById('categoryFilter');
     var noResults = document.getElementById('no-results');
+    var loadMoreBtn = document.getElementById('loadMoreBtn');
     var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
     if (!searchBar || !noResults || cards.length === 0) return;
 
-    function applyFilter() {
+    function applyFilter(resetPagination) {
+      if (resetPagination) currentlyVisible = CARDS_PER_PAGE;
       var query = searchBar.value.trim().toLowerCase();
       var cat = catFilter ? catFilter.value : 'all';
-      var visible = 0;
+      var matched = 0;
       cards.forEach(function (card) {
         var title = card.querySelector('.title');
         var text = title ? title.textContent.toLowerCase() : '';
         var matchesCat = cat === 'all' || card.getAttribute('data-category') === cat;
         var matchesText = query === '' || text.indexOf(query) !== -1;
-        var matches = matchesCat && matchesText;
-        card.style.display = matches ? 'flex' : 'none';
-        if (matches) visible++;
+        if (matchesCat && matchesText) {
+          matched++;
+          card.style.display = matched <= currentlyVisible ? 'flex' : 'none';
+        } else {
+          card.style.display = 'none';
+        }
       });
-      noResults.style.display = visible === 0 ? 'block' : 'none';
+      noResults.style.display = matched === 0 ? 'block' : 'none';
+      if (loadMoreBtn) {
+        loadMoreBtn.style.display = matched > currentlyVisible ? 'block' : 'none';
+      }
     }
 
-    searchBar.addEventListener('input', applyFilter);
-    if (catFilter) catFilter.addEventListener('change', applyFilter);
+    if (loadMoreBtn) {
+      loadMoreBtn.addEventListener('click', function () {
+        currentlyVisible += CARDS_PER_PAGE;
+        applyFilter(false);
+      });
+    }
+
+    // Any filter interaction resets the view to the first 24 matches.
+    searchBar.addEventListener('input', function () { applyFilter(true); });
+    if (catFilter) {
+      catFilter.addEventListener('change', function () { applyFilter(true); });
+    }
     searchBar.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
         searchBar.value = '';
-        applyFilter();
+        applyFilter(true);
       }
     });
+
+    // Initial state: first 24 cards visible, button sized accordingly.
+    applyFilter(false);
   })();
 
   // Jump-to-top / jump-to-bottom buttons. "Top" only appears once the
