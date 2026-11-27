@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
 import hashlib
 import html
 import json
@@ -121,6 +122,40 @@ OG_IMAGE_RE = re.compile(
     r"|content=[\"']([^\"']+)[\"'][^>]*property=[\"']og:image[\"'])",
     re.IGNORECASE,
 )
+# HTML comments are stripped before mining a landing page for metadata: a
+# <meta> tag inside one is inert theme leftover, not a real tag (MyVipon
+# ships a commented-out demo og:image on every page). An unterminated <!--
+# comments out the rest of the page, exactly as a browser treats it.
+HTML_COMMENT_RE = re.compile(r"<!--.*?(?:-->|\Z)", re.DOTALL)
+# Generic "no product photo" graphics that must never reach a deal card —
+# an empty dark square looks far cleaner than any of them. Matched anywhere
+# in the image URL, case-insensitively (see is_placeholder_image).
+PLACEHOLDER_IMAGE_RE = re.compile(
+    r"""(?xi)
+    (?<![a-z]) no [-_]? im(?:g|age) (?: [-_]? available)? (?![a-z])  # no-img / no-image / NoImageAvailable
+  | (?<![a-z]) (?:grey | gray | transparent) [-_]? pixel (?![a-z])     # Amazon 1x1 filler + spacers
+  | (?<![a-z]) no [-_]? (?:photo | picture) (?![a-z])
+  | (?<![a-z]) image [-_]? not [-_]? available (?![a-z])
+  | (?<![a-z]) missing [-_]? image (?![a-z])
+  | (?<![a-z]) placeholders? (?![a-z])
+  | (?:media | images) [\w.-]* -amazon\.com /images/G/      # Amazon static GRAPHICS (logos,
+                                                           # loaders, pixels) — product
+                                                           # photos live under /images/I/
+  | 19iht-btnumbers19A                                    # stock "brain" illustration the
+                                                          # MyVipon theme ships in a
+                                                          # commented-out og:image
+  | dealsofamerica\.com/images/doa-logo                   # DealOfAmerica site logo: every
+                                                          # deal page there declares it as
+                                                          # og:image, so it lands on
+                                                          # unrelated products
+    """
+)
+# Inline base64 images: a transparent spacer/tracking pixel decodes to a few
+# dozen bytes, a real photo to kilobytes.
+DATA_URI_RE = re.compile(
+    r"^data:image/[a-z0-9.+-]+;base64,([a-z0-9+/=\s]+)", re.IGNORECASE
+)
+DATA_URI_MAX_BYTES = 256
 # Free-shipping thresholds ("free shipping on $35+", "$25+ orders") are not
 # product prices — strip them before mining prices from RSS text, otherwise
 # the threshold becomes a fake "original price" (e.g. $2.20 trowel "was $35").
@@ -323,6 +358,29 @@ def extract_promo_code(text: str) -> Optional[str]:
     return None
 
 
+def is_placeholder_image(url: Optional[str]) -> bool:
+    """
+    True when an image URL is missing or empty, or points at a generic
+    placeholder instead of a real product photo: a "no image" graphic, a
+    transparent 1x1 spacer pixel (hosted, or inlined as a base64 data: URI),
+    or one of Amazon's static graphics. Deal cards drop such images so they
+    render a clean empty dark square instead. Never raises.
+    """
+    if not url:
+        return True
+    text = str(url).strip()
+    if not text:
+        return True
+    if text[:5].lower() == "data:":
+        match = DATA_URI_RE.match(text)
+        try:
+            payload = base64.b64decode(match.group(1)) if match else b""
+        except ValueError:  # binascii.Error is a ValueError: not valid base64
+            payload = b""
+        return len(payload) <= DATA_URI_MAX_BYTES
+    return bool(PLACEHOLDER_IMAGE_RE.search(text))
+
+
 def extract_image(entry) -> Optional[str]:
     """
     Best-effort product image extraction. Accepts either:
@@ -330,7 +388,9 @@ def extract_image(entry) -> Optional[str]:
       - a feedparser entry (checks media_content, media_thumbnail and
         enclosures for an item with a URL and a type starting with "image").
     Fallback: the first <img src="..."> inside entry.summary.
-    Returns None when nothing is found. Never raises.
+    Placeholder graphics (see is_placeholder_image) are skipped, so the next
+    candidate still gets its chance. Returns None when nothing usable is
+    found. Never raises.
 
     (feedparser entries are dict-like, so .get() works uniformly here.)
     """
@@ -340,7 +400,11 @@ def extract_image(entry) -> Optional[str]:
 
         # 1) Affiliate JSON feed dict.
         url = entry.get("image_url")
-        if url and str(url).startswith("http"):
+        if (
+            url
+            and str(url).startswith("http")
+            and not is_placeholder_image(url)
+        ):
             return url
 
         # 2) feedparser media namespaces + enclosures (type must be image/*).
@@ -348,19 +412,24 @@ def extract_image(entry) -> Optional[str]:
             for media in entry.get(key) or []:
                 media_url = media.get("url")
                 media_type = str(media.get("type", "") or "")
-                if media_url and media_type.startswith("image"):
+                if (
+                    media_url
+                    and media_type.startswith("image")
+                    and not is_placeholder_image(media_url)
+                ):
                     return media_url
         for enclosure in entry.get("enclosures") or []:
             if (
                 enclosure.get("href")
                 and str(enclosure.get("type", "") or "").startswith("image")
+                and not is_placeholder_image(enclosure["href"])
             ):
                 return enclosure["href"]
 
-        # 3) First inline <img> in the summary/description.
-        match = IMG_SRC_RE.search(entry.get("summary") or "")
-        if match:
-            return match.group(1)
+        # 3) First usable inline <img> in the summary/description.
+        for match in IMG_SRC_RE.finditer(entry.get("summary") or ""):
+            if not is_placeholder_image(match.group(1)):
+                return match.group(1)
     except Exception:
         pass  # image extraction must never break normalization
     return None
@@ -660,7 +729,10 @@ def fetch_rss_source(
 
     items: list[dict] = []
     for entry in parsed.entries[:MAX_ITEMS_PER_FEED]:
-        title = (entry.get("title") or "").strip()
+        # Some feeds (TechBargains) double-escape their titles, so feedparser
+        # hands us "&reg;", "&quot;", "&amp;" as literal text. Decode one
+        # more level; already-clean titles are left untouched.
+        title = html.unescape(entry.get("title") or "").strip()
         link = (entry.get("link") or "").strip()
         if not title or not link:
             continue
@@ -710,6 +782,8 @@ def scrape_html_source(spec: SourceSpec) -> list[dict]:
     for href, inner in ANCHOR_RE.findall(resp.text):
         url = urljoin(base, href.strip())
         title = TAG_RE.sub(" ", inner)
+        # Anchor text is raw HTML: decode its entities ("&amp;", "&trade;").
+        title = html.unescape(title)
         title = re.sub(r"\s+", " ", title).strip()
         if not title or len(title) < 8 or url in seen:
             continue
@@ -736,12 +810,36 @@ def scrape_html_source(spec: SourceSpec) -> list[dict]:
 
 # 1Sale embeds deals as Next.js flight JSON. After unescaping, each deal
 # object has these fields in a stable order (no nested {} between them).
+# The title group is [^{}], NOT a lazy .*?: a title can then never run past
+# its own object's closing brace. A malformed object (e.g. a "hero" promo
+# slot with "originalPrice":"$undefined") simply fails to match and is
+# skipped on its own. With .*? its title swallowed the NEXT object's fields,
+# publishing that deal's price/image/link under a wall of leaked JSON.
 ONESALE_DEAL_RE = re.compile(
-    r'"title":"(.*?)"[^{}]*?"image":"([^"]*)"[^{}]*?'
+    r'"title":"([^{}]*?)"[^{}]*?"image":"([^"]*)"[^{}]*?'
     r'"soldOut":(true|false)[^{}]*?'
     r'"price":([\d.]+),"originalPrice":([\d.]+|null)[^{}]*?'
     r'"dealUrl":"(.*?)"'
 )
+# Belt and braces for the title: a real product title is short prose with no
+# JSON syntax in it. Amazon caps product titles at 200 characters (longest
+# seen on 1Sale: 199), while the leaked-JSON "titles" ran 530-838.
+ONESALE_MAX_TITLE_CHARS = 300
+JSON_KEY_RE = re.compile(r'"\w+"\s*:')
+
+
+def looks_like_leaked_json(text: str) -> bool:
+    """
+    True when a scraped "title" is really raw JSON that leaked out of a
+    malformed payload: far too long for a product title, or containing
+    object braces or a "key": pair. Such entries are skipped entirely.
+    """
+    return (
+        len(text) > ONESALE_MAX_TITLE_CHARS
+        or "{" in text
+        or "}" in text
+        or bool(JSON_KEY_RE.search(text))
+    )
 
 
 def scrape_json_source(spec: SourceSpec) -> list[dict]:
@@ -766,6 +864,7 @@ def scrape_json_source(spec: SourceSpec) -> list[dict]:
             or "\\" in title
             or len(title.split()) < 3
             or not deal_url.startswith("http")
+            or looks_like_leaked_json(title)
         ):
             continue
         # promoCode sits right after dealUrl inside the same object.
@@ -1492,8 +1591,12 @@ def fetch_landing_page(url: str) -> Optional[str]:
 
 
 def extract_og_image(html_text: str) -> Optional[str]:
-    """og:image URL out of raw HTML, or None."""
-    match = OG_IMAGE_RE.search(html_text)
+    """
+    og:image URL out of raw HTML, or None. HTML comments are ignored first:
+    a <meta og:image> inside one is inert theme leftover, not a real tag
+    (MyVipon ships a commented-out demo image on every page).
+    """
+    match = OG_IMAGE_RE.search(HTML_COMMENT_RE.sub(" ", html_text or ""))
     if match:
         image = (match.group(1) or match.group(2) or "").strip()
         if image.startswith("http"):
@@ -1574,7 +1677,9 @@ def enrich_deal(deal: Deal, scrape: bool = False) -> Deal:
 
     IMAGES are always real: deals without an image get the og:image
     pulled off their landing page — Slickdeals' RSS summaries are plain
-    text with no image data whatsoever.
+    text with no image data whatsoever. Generic placeholder graphics
+    ("no image" art, spacer pixels, Amazon static assets) are dropped by
+    is_placeholder_image() so the card shows an empty dark square instead.
     """
     # --- 1) One shared landing-page fetch: og:image + URL resolution. ---
     landing_html: Optional[str] = None
@@ -1594,6 +1699,12 @@ def enrich_deal(deal: Deal, scrape: bool = False) -> Deal:
                     deal.url.split("?")[0][:70], resolved,
                 )
                 deal.url, deal.merchant = resolved, "amazon"
+
+    # A placeholder graphic (see is_placeholder_image) is worse than no image
+    # at all — drop it so the card renders a clean empty dark square instead.
+    # Covers both the og:image above and any image the feed supplied.
+    if is_placeholder_image(deal.image_url):
+        deal.image_url = None
 
     # --- 2) Real Amazon prices (--scrape), budget-capped. ---
     scraped = False
