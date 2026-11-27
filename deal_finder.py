@@ -148,6 +148,9 @@ PLACEHOLDER_IMAGE_RE = re.compile(
                                                           # deal page there declares it as
                                                           # og:image, so it lands on
                                                           # unrelated products
+  | (?<![a-z]) woot [-_]? logo (?![a-z])                  # Woot merchant logo: DealNews uses
+                                                          # it as the image on Woot promo
+                                                          # deals, not a product photo
     """
 )
 # Inline base64 images: a transparent spacer/tracking pixel decodes to a few
@@ -213,8 +216,6 @@ except ImportError:  # pragma: no cover
 # Titles are normalized (lowercase, strip punctuation/whitespace) before
 # fuzzy comparison.
 DEDUP_NOISE_RE = re.compile(r"[^a-z0-9 ]+")
-# 1Sale embeds its deal list as Next.js flight JSON with these escapes.
-JSON_ESCAPES = [("\\u0026", "&"), ('\\"', '"')]
 
 # Cloudflare bypass for RSS sources flagged cloudflare=True (eDealInfo).
 # cloudscraper solves the legacy JS challenges; modern Turnstile pages fail
@@ -381,6 +382,17 @@ def is_placeholder_image(url: Optional[str]) -> bool:
     return bool(PLACEHOLDER_IMAGE_RE.search(text))
 
 
+def clean_image_url(url) -> str:
+    """
+    Image URLs mined out of HTML need their one HTML entity decoded: feeds
+    that double-escape their summaries (DealNews) leave "&amp;" inside the
+    image src, which the browser then requests literally. Only "&amp;" is
+    touched; a blanket html.unescape() would corrupt real query parameters
+    such as "&reg=" or "&lt=".
+    """
+    return str(url or "").replace("&amp;", "&")
+
+
 def extract_image(entry) -> Optional[str]:
     """
     Best-effort product image extraction. Accepts either:
@@ -389,8 +401,8 @@ def extract_image(entry) -> Optional[str]:
         enclosures for an item with a URL and a type starting with "image").
     Fallback: the first <img src="..."> inside entry.summary.
     Placeholder graphics (see is_placeholder_image) are skipped, so the next
-    candidate still gets its chance. Returns None when nothing usable is
-    found. Never raises.
+    candidate still gets its chance. Every URL has its "&amp;" decoded (see
+    clean_image_url). Returns None when nothing usable is found. Never raises.
 
     (feedparser entries are dict-like, so .get() works uniformly here.)
     """
@@ -399,18 +411,14 @@ def extract_image(entry) -> Optional[str]:
             return None
 
         # 1) Affiliate JSON feed dict.
-        url = entry.get("image_url")
-        if (
-            url
-            and str(url).startswith("http")
-            and not is_placeholder_image(url)
-        ):
+        url = clean_image_url(entry.get("image_url"))
+        if url.startswith("http") and not is_placeholder_image(url):
             return url
 
         # 2) feedparser media namespaces + enclosures (type must be image/*).
         for key in ("media_content", "media_thumbnail"):
             for media in entry.get(key) or []:
-                media_url = media.get("url")
+                media_url = clean_image_url(media.get("url"))
                 media_type = str(media.get("type", "") or "")
                 if (
                     media_url
@@ -419,17 +427,19 @@ def extract_image(entry) -> Optional[str]:
                 ):
                     return media_url
         for enclosure in entry.get("enclosures") or []:
+            href = clean_image_url(enclosure.get("href"))
             if (
-                enclosure.get("href")
+                href
                 and str(enclosure.get("type", "") or "").startswith("image")
-                and not is_placeholder_image(enclosure["href"])
+                and not is_placeholder_image(href)
             ):
-                return enclosure["href"]
+                return href
 
         # 3) First usable inline <img> in the summary/description.
         for match in IMG_SRC_RE.finditer(entry.get("summary") or ""):
-            if not is_placeholder_image(match.group(1)):
-                return match.group(1)
+            src = clean_image_url(match.group(1))
+            if not is_placeholder_image(src):
+                return src
     except Exception:
         pass  # image extraction must never break normalization
     return None
@@ -808,19 +818,19 @@ def scrape_html_source(spec: SourceSpec) -> list[dict]:
     return items
 
 
-# 1Sale embeds deals as Next.js flight JSON. After unescaping, each deal
-# object has these fields in a stable order (no nested {} between them).
-# The title group is [^{}], NOT a lazy .*?: a title can then never run past
-# its own object's closing brace. A malformed object (e.g. a "hero" promo
-# slot with "originalPrice":"$undefined") simply fails to match and is
-# skipped on its own. With .*? its title swallowed the NEXT object's fields,
-# publishing that deal's price/image/link under a wall of leaked JSON.
-ONESALE_DEAL_RE = re.compile(
-    r'"title":"([^{}]*?)"[^{}]*?"image":"([^"]*)"[^{}]*?'
-    r'"soldOut":(true|false)[^{}]*?'
-    r'"price":([\d.]+),"originalPrice":([\d.]+|null)[^{}]*?'
-    r'"dealUrl":"(.*?)"'
+# 1Sale embeds its deals as Next.js "flight" data: a few
+# self.__next_f.push([1, "<body>"]) script calls whose body is one JSON
+# string literal. Decoding that literal (json.loads) is the only correct
+# unescape. A quote inside a title (every laptop with an inch mark, e.g.
+# 15.6") is written as three backslashes and a quote, so the hand-rolled
+# text replace + regex this used to rely on cut such titles at the quote
+# and dropped the deal.
+NEXT_FLIGHT_CHUNK_RE = re.compile(
+    r'__next_f\.push\(\s*\[\s*1\s*,\s*("(?:[^"\\]|\\.)*")\s*\]\s*\)'
 )
+# The decoded text is row-prefixed ("2a:[...]"), i.e. not one JSON document,
+# but every deal list in it is a valid "key": [ {...}, ... ] array.
+JSON_ARRAY_KEY_RE = re.compile(r'"[A-Za-z_]\w*"\s*:\s*\[')
 # Belt and braces for the title: a real product title is short prose with no
 # JSON syntax in it. Amazon caps product titles at 200 characters (longest
 # seen on 1Sale: 199), while the leaked-JSON "titles" ran 530-838.
@@ -842,48 +852,123 @@ def looks_like_leaked_json(text: str) -> bool:
     )
 
 
+def _flight_deal_objects(html_text: str) -> list[dict]:
+    """
+    Every deal object embedded in a Next.js flight payload, in page order.
+    Chunks that are not JSON string literals and arrays that are not valid
+    JSON are skipped. An object listed twice (same id in two arrays) is
+    returned once. Never raises.
+    """
+    decoder = json.JSONDecoder()
+    chunks: list[str] = []
+    for match in NEXT_FLIGHT_CHUNK_RE.finditer(html_text or ""):
+        try:
+            body = json.loads(match.group(1))
+        except ValueError:
+            log.debug("Skipping a flight chunk that is not a JSON string")
+            continue
+        if isinstance(body, str):
+            chunks.append(body)
+
+    text = "".join(chunks)
+    objects: list[dict] = []
+    seen: set = set()
+    for match in JSON_ARRAY_KEY_RE.finditer(text):
+        try:
+            rows, _ = decoder.raw_decode(text, match.end() - 1)
+        except ValueError:
+            continue
+        if not isinstance(rows, list):
+            continue
+        for row in rows:
+            if not (
+                isinstance(row, dict)
+                and isinstance(row.get("title"), str)
+                and isinstance(row.get("dealUrl"), str)
+            ):
+                continue
+            row_id = row.get("id")
+            key = row_id if isinstance(row_id, (str, int)) else row["dealUrl"]
+            if key in seen:
+                continue
+            seen.add(key)
+            objects.append(row)
+    return objects
+
+
 def scrape_json_source(spec: SourceSpec) -> list[dict]:
-    """JSON-in-HTML source (1Sale): mine the Next.js flight-data payload."""
+    """
+    JSON-in-HTML source (1Sale): read the deals out of the Next.js
+    flight-data payload. Sold-out entries and malformed ones (hero/promo
+    slots whose price fields are "$undefined") are skipped whole.
+    """
     log.info("Scraping JSON source [%s]: %s", spec.name, spec.url)
-    resp = _fetch_url(spec.url)
-    text = resp.text
-    for old, new in JSON_ESCAPES:
-        text = text.replace(old, new)
+    objects = _flight_deal_objects(_fetch_url(spec.url).text)
+    if not objects:
+        raise RuntimeError(
+            "flight payload has no parsable deal list (page layout changed?)"
+        )
 
     items: list[dict] = []
-    for m in ONESALE_DEAL_RE.finditer(text):
-        (title, image, sold_out, price_s, original_s, deal_url) = m.groups()
-        if sold_out == "true":
-            continue
-        title = title.strip()
-        # Titles cut short by an escaped quote truncate to junk
-        # ("15.6\\", "Warming Mat for Food (24\\") — require three real
-        # words and no unresolved escape characters.
-        if (
+    skipped: dict[str, int] = {}
+    for obj in objects:
+        title = str(obj.get("title") or "").strip()
+        deal_url = str(obj.get("dealUrl") or "")
+        price = to_float(obj.get("price"))
+        original = to_float(obj.get("originalPrice"))
+        raw_original = obj.get("originalPrice")
+
+        if obj.get("soldOut") is True:
+            reason = "sold out"
+        elif (
             not title
-            or "\\" in title
+            or "\\" in title  # a real JSON decode leaves no escape characters
             or len(title.split()) < 3
-            or not deal_url.startswith("http")
             or looks_like_leaked_json(title)
         ):
+            reason = "unusable title"
+        elif not deal_url.startswith("http"):
+            reason = "no product link"
+        elif price is None or (
+            original is None and raw_original not in (None, "")
+        ):
+            reason = "malformed price"
+        else:
+            reason = None
+        if reason:
+            skipped[reason] = skipped.get(reason, 0) + 1
             continue
-        # promoCode sits right after dealUrl inside the same object.
-        tail = text[m.end():m.end() + 80]
-        pm = re.match(r'[^{}]*?"promoCode":"([^"]+)"', tail)
-        promo = pm.group(1).strip() if pm else None
+        if len(items) >= MAX_ITEMS_PER_FEED:
+            continue
+
+        promo = obj.get("promoCode")
+        promo = promo.strip() if isinstance(promo, str) else None
+        image = obj.get("image")
         items.append(
             {
                 "title": title,
                 "url": deal_url,
                 "merchant": merchant_from_url(deal_url),
-                "price": to_float(price_s),
-                "original_price": to_float(original_s),
+                "price": price,
+                "original_price": original,
+                # "$undefined" promo codes pass through here and are dropped
+                # by the promo-code sanitizer in normalize_deal.
                 "promo_code": promo or extract_promo_code(title),
-                "image_url": image if image.startswith("http") else None,
+                "image_url": (
+                    image if isinstance(image, str) and image.startswith("http") else None
+                ),
             }
         )
-        if len(items) >= MAX_ITEMS_PER_FEED:
-            break
+
+    summary = ", ".join("%s %d" % kv for kv in sorted(skipped.items())) or "none"
+    log.info(
+        "[%s] flight payload: %d deal objects; kept %d (cap %d); skipped: %s",
+        spec.name,
+        len(objects),
+        len(items),
+        MAX_ITEMS_PER_FEED,
+        summary,
+    )
     return items
 
 
@@ -1594,11 +1679,12 @@ def extract_og_image(html_text: str) -> Optional[str]:
     """
     og:image URL out of raw HTML, or None. HTML comments are ignored first:
     a <meta og:image> inside one is inert theme leftover, not a real tag
-    (MyVipon ships a commented-out demo image on every page).
+    (MyVipon ships a commented-out demo image on every page). The URL has
+    its "&amp;" decoded (see clean_image_url).
     """
     match = OG_IMAGE_RE.search(HTML_COMMENT_RE.sub(" ", html_text or ""))
     if match:
-        image = (match.group(1) or match.group(2) or "").strip()
+        image = clean_image_url((match.group(1) or match.group(2) or "")).strip()
         if image.startswith("http"):
             return image
     return None
