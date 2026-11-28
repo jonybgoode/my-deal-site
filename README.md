@@ -18,7 +18,7 @@ Affiliate feed (fallback only)     ─┘
         ▼
 normalize_deal() ─> enrich_deal() ─> store_deal() ─> score_deal()
    (Deal)            (URL resolve +   (SQLite:        (all-time low
-                      real/mock         deals +         + discount)
+                      source            deals +         + discount)
                       prices)           price_history)        │
                                                             ▼
                                   deduplicate_deals() (rapidfuzz >= 85 + price within 5%)
@@ -33,7 +33,7 @@ normalize_deal() ─> enrich_deal() ─> store_deal() ─> score_deal()
 
 | Source | Kind | Notes |
 |---|---|---|
-| Slickdeals | RSS | frontpage Amazon search feed |
+| Slickdeals | RSS | **Front page** (all stores). The feed holds only its newest ~25 items and has no paging; every item is read (no per-feed cap) and is **always published**, whatever it scores |
 | eDealInfo | RSS (cloudscraper) | Cloudflare bypass attempt via cloudscraper; Turnstile challenges still fail → `Cloudflare bypass failed` WARNING |
 | MusiciansFriend | Playwright + stealth | Stupid Deal of the Day; Akamai serves a ~20-byte bot stub — waits for deal selectors, WARNINGs `Akamai bypass failed` when blocked |
 | BensBargains | RSS | |
@@ -63,10 +63,25 @@ bot walls; the WARNINGs in the log are your diagnostic.
   (score >= 15) — they are your browsable catalog and are not filtered by
   `last_alert_price`. That column only gates the optional Telegram
   side-channel (and any future "NEW since last run" logic).
+- **Prices are never invented:** a deal shows the prices its source
+  stated, or no price at all. For RSS feeds those are the prices in the
+  **title** — descriptions are prose and are not mined, so promo posts no
+  longer turn into nonsense prices. A price without a "was" price has no
+  discount (`original_price` None, `discount_percent` 0), and a deal
+  without a price renders just the image and the title.
+- **Front-page exception:** Slickdeals front-page deals
+  (`ALWAYS_PUBLISH_SOURCES`) are always published, whatever they score —
+  so a front-page deal with a single price, or none at all, still appears.
+- **Page order:** front-page (Slickdeals) deals first; then every other
+  deal by discount, biggest first; then the newest first.
 - After scoring, cross-source duplicates collapse: normalized-title
   match >= 85 (rapidfuzz `token_set_ratio`) **and** prices within 5%
-  keep one deal per cluster — preferring Amazon-linked rows (deepest
-  price history), then the highest score.
+  keep one deal per cluster — preferring front-page (Slickdeals) rows so
+  no front-page deal is ever merged into another source's card, then
+  Amazon-linked rows (deepest price history), then the highest score.
+  Two front-page deals only count as duplicates when their titles are
+  near-identical (`token_sort_ratio` >= 90), so e.g. a women's and a
+  men's version of the same shoe both stay.
 
 ## Project layout
 
@@ -153,8 +168,8 @@ python deal_finder.py --once
 python deal_finder.py
 
 # 5) Real Amazon prices: scrape live product pages with Playwright
-#    (up to MAX_SCRAPE deals per run, default 10; falls back to mock
-#    prices with a WARNING when Amazon blocks or a price is missing)
+#    (up to MAX_SCRAPE deals per run, default 10; when Amazon blocks or
+#    shows no price, the deal keeps the prices its source stated)
 python deal_finder.py --dry-run --once --scrape
 ```
 
@@ -182,14 +197,15 @@ The HTML page is a fully self-contained static file — just open it:
 
 **Browsing features (client-side, no server needed):**
 
-- **Pagination:** the first 24 cards load; a **Load More** button at the
-  bottom of the grid reveals the next 24 (and so on). The button hides
-  when everything is visible.
+- **Infinite scroll:** the first 24 cards load; as you scroll near the
+  bottom, the next 24 appear automatically (no button).
+- **Clickable cards:** the product image and the title both open the deal
+  in a new tab (there is no separate "View deal" button).
 - **Search + category filter:** typing in the search box or changing the
-  category resets the view to the first 24 *matches*; `Escape` clears the
-  search text.
-- Jump-to-top / jump-to-bottom buttons appear fixed at the bottom-right
-  once the page is scrollable.
+  category resets the view to the first 24 *matches* (scrolling loads
+  more of them); `Escape` clears the search text.
+- Jump-to-top / jump-to-bottom buttons sit fixed at the bottom-right;
+  **↓ Bottom** reveals every remaining matching card before it scrolls.
 
 ## Deploying to GitHub Pages
 
@@ -333,9 +349,10 @@ Terms of Service and robots.txt.
 - **"RSS feed ... returned 0 entries"** — the feed URL is dead, redirects
   to an HTML page, or serves malformed XML. Open the URL in a browser and
   look for an XML icon/feed link; sites often move their feed.
-- **No qualifying deals:** remember a deal's first sighting is trivially
-  its own 30-day low, and `score >= 15` filters those out until a real
-  price drop appears in `price_history`.
+- **No qualifying deals:** a deal only qualifies on a real discount — one
+  its source states (>= 20%), or an all-time low in `price_history`.
+  Prices are never invented, so a quiet feed can legitimately leave just
+  the Slickdeals front page on the site.
 - **Telegram never sends:** it's opt-in now (see above) and only carries
   score >= 40 deals; also confirm the bot is a channel admin.
 - **Playwright missing:** install it (`pip install playwright`) or leave

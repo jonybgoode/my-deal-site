@@ -8,17 +8,19 @@ Pipeline (one pass):
        failures are non-fatal), falling back to the mock affiliate feed
        when every source comes up dry.
     2. Normalize everything into a standard `Deal` dataclass, then enrich
-       prices via enrich_deal(): real Amazon prices with --scrape
-       (Playwright, budget-capped by MAX_SCRAPE), mock PA-API lookup
-       otherwise.
+       prices via enrich_deal(): the prices each source states, used as
+       given (never invented); with --scrape, the real Amazon price
+       (Playwright, budget-capped by MAX_SCRAPE).
     3. Store deals + every price check in SQLite.
     4. Score deals:  qualifies if discount >= 20% OR price is the all-time
                      low (local price_history + backfilled Keepa-style
                      external history for new deals).
                      score = discount_percent + (10 if all-time low else 0)
-                     only deals with score >= 15 make the page.
+                     only deals with score >= 15 make the page — except front-page (Slickdeals) deals,
+                      which always do.
     5. Deduplicate across sources (rapidfuzz: title match >= 85 AND price
-       within 5%), then render qualifying deals to static HTML pages —
+       within 5%), then render qualifying deals to static HTML pages,
+       front-page deals first, then by discount, then newest —
        deals without a promo code -> deals.html, deals WITH one ->
        coupons.html. Both are the mandatory output of every run.
     6. Optional Telegram side-channel: if TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID
@@ -162,8 +164,16 @@ DATA_URI_MAX_BYTES = 256
 # Free-shipping thresholds ("free shipping on $35+", "$25+ orders") are not
 # product prices — strip them before mining prices from RSS text, otherwise
 # the threshold becomes a fake "original price" (e.g. $2.20 trowel "was $35").
+# A threshold glues the "+" to the amount ("$35+"), or spells out a keyword
+# ("orders of $35 +"). Deal titles write the price with a SPACE before the
+# plus ("$60 + Free S&H") — that is the price itself, and stripping it used
+# to leave the list price from the description behind as the deal price.
+# The keyword must stand alone as a word: "Book Cover $200 +" is a price
+# (the "over" in "Cover" must not count).
 SHIPPING_THRESHOLD_RE = re.compile(
-    r"(?:(?:w/|with|over|on(?:\s+orders)?\s+of)\s+)?[$£€]\s?\d{1,6}(?:[.,]\d{1,2})?\s*\+",
+    r"[$£€]\s?\d{1,6}(?:[.,]\d{1,2})?\+"
+    r"|(?:(?<![A-Za-z0-9])(?:w/|with|over|on(?:\s+orders)?\s+of)\s+)"
+    r"[$£€]\s?\d{1,6}(?:[.,]\d{1,2})?\s*\+",
     re.IGNORECASE,
 )
 # Raw Amazon product URL — see AMAZON_ASIN_RE at the source registry below.
@@ -265,13 +275,21 @@ class SourceSpec:
     # For kind="rss": fetch through cloudscraper to attempt a Cloudflare
     # bypass (eDealInfo serves a "Just a moment..." 403 to plain requests).
     cloudflare: bool = False
+    # For kind="rss": how many entries to keep. None = take the whole feed,
+    # so a priority source is never truncated.
+    max_items: Optional[int] = MAX_ITEMS_PER_FEED
 
 
 # The 14-source registry (probed & verified 2026-11). Sources that fail or
 # return nothing simply log a WARNING and the run continues.
 SOURCES: list[SourceSpec] = [
+    # Frontpage = Slickdeals' editor-curated home page, EVERY deal (not only
+    # the Amazon ones). The feed publishes its newest ~25 items and ignores
+    # paging parameters (probed 2026-11); max_items=None so whatever it does
+    # offer is always taken in full.
     SourceSpec("slickdeals", "rss",
-               "https://slickdeals.net/newsearch.php?mode=frontpage&searcharea=deals&searchin=first&rss=1&q=amazon"),
+               "https://slickdeals.net/newsearch.php?mode=frontpage&searcharea=deals&searchin=first&rss=1",
+               max_items=None),
     SourceSpec("edealinfo", "rss", "https://www.edealinfo.com/rss/latest.xml",
                cloudflare=True),
     SourceSpec("musiciansfriend", "playwright",
@@ -289,6 +307,12 @@ SOURCES: list[SourceSpec] = [
     SourceSpec("techbargains", "rss", "https://www.techbargains.com/rss.xml"),
     SourceSpec("myvipon", "playwright", "https://www.myvipon.com/"),
 ]
+
+# Sources whose deals are published no matter how they score. Slickdeals'
+# front page is hand-curated, so a deal there is a deal even when its title
+# carries no "was" price to compare against. Their titles are trusted for
+# prices too: enrich_deal() invents nothing for them.
+ALWAYS_PUBLISH_SOURCES = frozenset({"slickdeals"})
 
 
 # ---------------------------------------------------------------------------
@@ -646,6 +670,11 @@ def backfill_external_history(conn: sqlite3.Connection, deal: Deal) -> int:
     """
     if deal.id is None:
         return 0
+    # A deal without a price (a coupon or cash-back post on the Slickdeals
+    # front page, say) has no price history: the external source would invent
+    # one around its default base price.
+    if deal.price is None:
+        return 0
     n_local = conn.execute(
         "SELECT COUNT(*) FROM price_history WHERE deal_id = ?", (deal.id,)
     ).fetchone()[0]
@@ -692,12 +721,16 @@ def _fetch_url(url: str, timeout: Optional[int] = None) -> requests.Response:
 
 
 def fetch_rss_source(
-    name: str, url: str, cloudflare: bool = False
+    name: str,
+    url: str,
+    cloudflare: bool = False,
+    max_items: Optional[int] = MAX_ITEMS_PER_FEED,
 ) -> list[dict]:
     """
     Fetch one RSS/Atom feed and return semi-normalized raw deals.
     Uses requests (for timeouts) and feeds the body to feedparser.
     Sources flagged cloudflare=True go through cloudscraper instead.
+    At most `max_items` entries are kept (None = the whole feed).
     """
     log.info("Fetching RSS feed [%s]: %s", name, url)
     if cloudflare:
@@ -737,8 +770,14 @@ def fetch_rss_source(
         )
         return []
 
+    entries = parsed.entries
+    if max_items is not None:
+        entries = entries[:max_items]
+    log.info("RSS [%s]: feed has %d entries, keeping %d",
+             name, len(parsed.entries), len(entries))
+
     items: list[dict] = []
-    for entry in parsed.entries[:MAX_ITEMS_PER_FEED]:
+    for entry in entries:
         # Some feeds (TechBargains) double-escape their titles, so feedparser
         # hands us "&reg;", "&quot;", "&amp;" as literal text. Decode one
         # more level; already-clean titles are left untouched.
@@ -746,12 +785,18 @@ def fetch_rss_source(
         link = (entry.get("link") or "").strip()
         if not title or not link:
             continue
-        # Mine the title + description for prices and promo codes.
-        # Shipping thresholds ("on $35+") are stripped first so
-        # they don't pollute the price/original-price heuristics.
+        # Prices are mined from the TITLE only. The description is prose:
+        # on promo posts it mentions savings amounts, spend thresholds and
+        # other products ("$100 off a $949.99 TV"), which would otherwise
+        # become nonsense prices. A deal whose title states no price simply
+        # has none until --scrape reads the real product page.
+        # Shipping thresholds ("on $35+") are stripped first so they
+        # don't pollute the price/original-price heuristics.
+        price, original = extract_prices(
+            SHIPPING_THRESHOLD_RE.sub(" ", title)
+        )
+        # Promo codes may sit in the title or in the description.
         blob = f"{title} {entry.get('summary', '')}"
-        blob = SHIPPING_THRESHOLD_RE.sub(" ", blob)
-        price, original = extract_prices(blob)
         items.append(
             {
                 "title": title,
@@ -1228,7 +1273,8 @@ def fetch_all_sources() -> list[tuple[dict, str]]:
         try:
             if spec.kind == "rss":
                 items = fetch_rss_source(spec.name, spec.url,
-                                         cloudflare=spec.cloudflare)
+                                         cloudflare=spec.cloudflare,
+                                         max_items=spec.max_items)
             elif spec.kind == "html":
                 items = scrape_html_source(spec)
             elif spec.kind == "json":
@@ -1440,7 +1486,7 @@ async def _scrape_amazon_async(
     Anti-bot basics: realistic desktop UA + viewport + locale, and a random
     2-5 s pause before navigating so back-to-back scrapes don't look
     robotic. Amazon can still serve a captcha wall — that raises
-    AmazonBlockedError and the caller falls back to mock prices.
+    AmazonBlockedError and the caller keeps the prices its source stated.
 
     Returns {"price": float, "original_price": float | None,
              "title": str | None, "resolved_url": str | None}.
@@ -1747,19 +1793,22 @@ def enrich_deal(deal: Deal, scrape: bool = False) -> Deal:
     outbound link is a JS-protected click hop are resolved by the
     Playwright scraper below.
 
-    PRICES, two modes:
+    PRICES — never invented, for every source:
+      - The prices a source states (in the title, or in structured feed
+        data) are used exactly as given. A price without a "was" price is
+        shown as exactly that: original_price stays None, discount is 0.
       - scrape=True (CLI --scrape): deals whose URL points at Amazon —
-        directly or via the click hop — get the REAL current/list price
-        off the live product page (budget-capped at MAX_SCRAPE per run).
-        Any failure (captcha, timeout, no price found) logs a WARNING and
-        falls through to the mock logic below.
-      - scrape=False (default): mock PA-API lookup —
-          - no price at all        -> random mock price between $50 and $500
-          - price, no original     -> mock original price 10-40% above it
-        FUTURE: replace the mock with the real PA-API once approved.
+        directly or via the click hop — additionally get the REAL current
+        price off the live product page (budget-capped at MAX_SCRAPE per
+        run). A scrape refines a deal, it never strips it: when the live
+        page shows no list price, the "was" price the source stated is
+        kept. Any failure (captcha, timeout, no price found) logs a
+        WARNING and the deal simply keeps its source prices.
+      - A deal without any price stays without one. Honest data beats a
+        fake discount.
 
-    discount_percent is recalculated from whichever price pair is set
-    (a real 0% discount stays 0% — no faking).
+    discount_percent is recalculated from the price pair that is set
+    (a real 0% discount stays 0%).
 
     IMAGES are always real: deals without an image get the og:image
     pulled off their landing page — Slickdeals' RSS summaries are plain
@@ -1792,6 +1841,11 @@ def enrich_deal(deal: Deal, scrape: bool = False) -> Deal:
     if is_placeholder_image(deal.image_url):
         deal.image_url = None
 
+    # The "was" price the source stated is kept whenever the live product
+    # page shows no list price: a scrape refines a deal, never strips the
+    # discount its source reported.
+    feed_original = deal.original_price
+
     # --- 2) Real Amazon prices (--scrape), budget-capped. ---
     scraped = False
     if scrape:
@@ -1802,7 +1856,7 @@ def enrich_deal(deal: Deal, scrape: bool = False) -> Deal:
             try:
                 data = scrape_amazon_price(deal.url)
                 deal.price = data["price"]
-                deal.original_price = data["original_price"]
+                deal.original_price = data["original_price"] or feed_original
                 if not deal.title.strip() and data.get("title"):
                     deal.title = data["title"]
                 _SCRAPE_STATE["ok"] += 1
@@ -1815,13 +1869,13 @@ def enrich_deal(deal: Deal, scrape: bool = False) -> Deal:
             except AmazonBlockedError as exc:
                 _SCRAPE_STATE["failed"] += 1
                 log.warning(
-                    "Amazon scrape failed for %s: %s; falling back to mock price",
+                    "Amazon scrape failed for %s: %s; keeping the source's prices",
                     deal.url, exc,
                 )
             except Exception as exc:  # timeout, Playwright crash, ...
                 _SCRAPE_STATE["failed"] += 1
                 log.warning(
-                    "Amazon scrape error for %s: %s; falling back to mock price",
+                    "Amazon scrape error for %s: %s; keeping the source's prices",
                     deal.url, exc,
                 )
         elif not asin_match and budget_left and landing_html:
@@ -1835,7 +1889,7 @@ def enrich_deal(deal: Deal, scrape: bool = False) -> Deal:
                     deal.url = data["resolved_url"] or deal.url
                     deal.merchant = "amazon"
                     deal.price = data["price"]
-                    deal.original_price = data["original_price"]
+                    deal.original_price = data["original_price"] or feed_original
                     if not deal.title.strip() and data.get("title"):
                         deal.title = data["title"]
                     _SCRAPE_STATE["ok"] += 1
@@ -1848,29 +1902,27 @@ def enrich_deal(deal: Deal, scrape: bool = False) -> Deal:
                 except AmazonBlockedError as exc:
                     _SCRAPE_STATE["failed"] += 1
                     log.warning(
-                        "Click-hop scrape failed for %s: %s; falling back to mock price",
+                        "Click-hop scrape failed for %s: %s; keeping the source's prices",
                         deal.url.split("?")[0][:70], exc,
                     )
                 except Exception as exc:
                     _SCRAPE_STATE["failed"] += 1
                     log.warning(
-                        "Click-hop scrape error for %s: %s; falling back to mock price",
+                        "Click-hop scrape error for %s: %s; keeping the source's prices",
                         deal.url.split("?")[0][:70], exc,
                     )
         elif not budget_left and not _SCRAPE_STATE["budget_warned"]:
             _SCRAPE_STATE["budget_warned"] = True
             log.warning(
                 "Amazon scrape budget reached (MAX_SCRAPE=%d); "
-                "remaining Amazon deals keep their mock prices",
+                "remaining Amazon deals keep their source prices",
                 max_scrapes(),
             )
 
-    # --- 3) Mock fallback + discount recalculation. ---
-    if not scraped:
-        if deal.price is None:
-            deal.price = round(random.uniform(50, 500), 2)
-        if deal.original_price is None and deal.price is not None:
-            deal.original_price = round(deal.price * random.uniform(1.10, 1.40), 2)
+    # --- 3) Discount recalculation. No invented prices, ever. ---
+    # A price without a "was" price is just that: original_price stays None
+    # and the discount is 0. Nothing here invents a price or a "was" price —
+    # a deal with no price at all stays without one.
     if deal.price is not None and deal.original_price \
             and deal.original_price > deal.price:
         deal.discount_percent = round(
@@ -2059,11 +2111,24 @@ def _is_amazon_deal(deal: Deal) -> bool:
     return bool(AMAZON_ASIN_RE.search(unquote(deal.url or "")))
 
 
+def _is_trusted_deal(deal: Deal) -> bool:
+    """Deal from an always-published source: its prices are real (see
+    ALWAYS_PUBLISH_SOURCES), so it must win its duplicate cluster."""
+    return deal.source in ALWAYS_PUBLISH_SOURCES
+
+
 def deduplicate_deals(deals: list[Deal]) -> list[Deal]:
     """
     Collapse cross-source duplicates: normalized-title token_set_ratio >= 85
-    AND prices within 5% -> keep ONE per cluster. Ranked first by "has an
+    AND prices within 5% -> keep ONE per cluster. Ranked first by "comes from
+    an always-published source" (front page: curated, always shown first), then by "has an
     Amazon link" (deepest price history), then by pipeline score.
+
+    Two always-published deals are the same deal only when their titles are
+    near-identical (token_sort_ratio >= 90) on top of the rule above: the
+    front page lists distinct deals whose titles can share most of their
+    words ("Women's" vs "Men's" colourways of one shoe), and every front-page
+    deal has to appear on the site.
     """
     if len(deals) < 2:
         return deals
@@ -2076,7 +2141,12 @@ def deduplicate_deals(deals: list[Deal]) -> list[Deal]:
 
     ranked = sorted(
         deals,
-        key=lambda d: (_is_amazon_deal(d), d.score, d.discount_percent or 0),
+        key=lambda d: (
+            _is_trusted_deal(d),
+            _is_amazon_deal(d),
+            d.score,
+            d.discount_percent or 0,
+        ),
         reverse=True,
     )
     kept: list[Deal] = []
@@ -2084,10 +2154,15 @@ def deduplicate_deals(deals: list[Deal]) -> list[Deal]:
     for cand in ranked:
         dup_of = None
         for k in kept:
-            ratio = fuzz.token_set_ratio(
-                _normalized_title(cand.title), _normalized_title(k.title)
-            )
-            if ratio >= 85 and _prices_within_5pct(cand.price, k.price):
+            cand_title = _normalized_title(cand.title)
+            kept_title = _normalized_title(k.title)
+            ratio = fuzz.token_set_ratio(cand_title, kept_title)
+            if ratio < 85 or not _prices_within_5pct(cand.price, k.price):
+                continue
+            same_cluster = True
+            if _is_trusted_deal(cand) and _is_trusted_deal(k):
+                same_cluster = fuzz.token_sort_ratio(cand_title, kept_title) >= 90
+            if same_cluster:
                 dup_of = k
                 break
         if dup_of is None:
@@ -2164,12 +2239,29 @@ def render_html(
                 "sparkline": sparkline,
                 "is_atl": is_atl,
                 "category": deal.category,
+                "source": deal.source,
+                "found_at": deal.found_at,
             }
         )
 
-    # Biggest discount first (None-safe sort key).
+    # Page order: the front page first (Slickdeals deals are hand-curated
+    # and must never be buried), then the biggest discount, then the
+    # newest. Ties keep the pipeline's own order (stable sort).
+    def _found_timestamp(found_at: str) -> float:
+        try:
+            found = datetime.fromisoformat(found_at)
+        except (TypeError, ValueError):
+            return 0.0
+        if found.tzinfo is None:  # be forgiving about naive timestamps
+            found = found.replace(tzinfo=timezone.utc)
+        return found.timestamp()
+
     rows.sort(
-        key=lambda r: (r["discount_percent"] or 0), reverse=True
+        key=lambda r: (
+            0 if r["source"] in ALWAYS_PUBLISH_SOURCES else 1,
+            -(r["discount_percent"] or 0),
+            -_found_timestamp(r["found_at"]),
+        )
     )
 
     env = Environment(
@@ -2219,8 +2311,9 @@ def run_pipeline(dry_run: bool = False, scrape: bool = False) -> Optional[Path]:
     (+ optional Telegram side-channel). Returns the path of the HTML page
     that was written, or None if the pass crashed.
 
-    scrape=True (CLI --scrape) replaces mock prices with real ones scraped
-    off Amazon product pages (budget-capped by MAX_SCRAPE, default 10).
+    scrape=True (CLI --scrape) additionally reads real prices off Amazon
+    product pages (budget-capped by MAX_SCRAPE, default 10). Prices are
+    never invented: a deal shows the prices its source stated, or none.
     """
     log.info("=== Deal finder run started ===")
     conn = get_db()
@@ -2229,7 +2322,7 @@ def run_pipeline(dry_run: bool = False, scrape: bool = False) -> Optional[Path]:
     if scrape and not PLAYWRIGHT_AVAILABLE:
         log.warning(
             "--scrape requested but Playwright is not installed; "
-            "using mock prices for everything"
+            "deals keep the prices their sources stated"
         )
         scrape = False
 
@@ -2258,8 +2351,8 @@ def run_pipeline(dry_run: bool = False, scrape: bool = False) -> Optional[Path]:
         else:
             log.warning("SCRAPE_SAMPLE_URL is set but Playwright is not installed; skipping")
 
-    # Normalize (drop junk), then enrich (real Amazon prices via --scrape,
-    # mock PA-API lookup otherwise), then store + score.
+    # Normalize (drop junk), then enrich (source prices as stated, or the
+    # real Amazon price via --scrape), then store + score.
     deals: list[Deal] = []
     for raw, src in raw_items:
         deal = normalize_deal(raw, src)
@@ -2270,13 +2363,14 @@ def run_pipeline(dry_run: bool = False, scrape: bool = False) -> Optional[Path]:
     log.info("Normalized + enriched %d deals from %d raw items", len(deals), len(raw_items))
     if scrape:
         log.info(
-            "Amazon scraper: %d ok, %d failed (fell back to mock), budget %d/%d",
+            "Amazon scraper: %d ok, %d failed (kept source prices), budget %d/%d",
             _SCRAPE_STATE["ok"], _SCRAPE_STATE["failed"],
             _SCRAPE_STATE["used"], max_scrapes(),
         )
 
     # The HTML page is the user's browsable catalog: it ALWAYS renders all
-    # currently-qualifying deals (qualifies AND score >= 15). last_alert_price
+    # currently-qualifying deals (qualifies AND score >= 15), plus every
+    # deal from the always-published sources. last_alert_price
     # does NOT filter the page — it only gates the Telegram side-channel and
     # any future "NEW since last run" logic.
     qualifying: list[tuple[Deal, float]] = []
@@ -2285,7 +2379,9 @@ def run_pipeline(dry_run: bool = False, scrape: bool = False) -> Optional[Path]:
         backfill_external_history(conn, deal)  # year of history for new deals
         score, qualifies = score_deal(conn, deal)
         deal.score = score  # feeds the dedup ranking below
-        if qualifies and score >= 15:
+        # Front-page deals are published whatever they score; everything
+        # else needs a real discount (or an all-time low).
+        if (qualifies and score >= 15) or deal.source in ALWAYS_PUBLISH_SOURCES:
             qualifying.append((deal, score))
 
     # Cross-source duplicates collapse BEFORE rendering / alerting.
@@ -2370,8 +2466,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--scrape", action="store_true",
-        help="Fetch real Amazon prices with Playwright instead of mock prices "
-             "(max MAX_SCRAPE deals per run, default 10)",
+        help="Fetch real Amazon prices with Playwright (max MAX_SCRAPE deals "
+             "per run, default 10); other deals keep the prices their "
+             "sources stated",
     )
     args = parser.parse_args()
 
