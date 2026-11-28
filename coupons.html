@@ -18,6 +18,10 @@
       --accent: #3b82f6;
     }
     * { box-sizing: border-box; }
+    /* No scroll anchoring: when a filter resets the list while the page is
+       scrolled down, the browser would otherwise keep the scroll sentinel in
+       place and the whole list would be revealed at once. */
+    html { overflow-anchor: none; }
     body {
       margin: 0;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -184,37 +188,6 @@
       text-decoration: line-through;
       font-size: 0.9rem;
     }
-    .badge-atl {
-      background: var(--green-dark);
-      color: #7ee2a8;
-      border: 1px solid var(--green);
-      font-weight: 700;
-      font-size: 0.7rem;
-      letter-spacing: 0.04em;
-      padding: 2px 8px;
-      border-radius: 6px;
-      white-space: nowrap;
-    }
-    .history-block {
-      background: #0b0d11;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px 10px;
-    }
-    .history-block .sparkline svg {
-      display: block;
-      width: 100%;
-      height: 28px;
-    }
-    .history-meta {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      margin-top: 4px;
-      color: var(--muted);
-      font-size: 0.75rem;
-    }
-    .history-meta .low { color: #7ee2a8; font-weight: 600; }
     .promo {
       display: flex;
       align-items: center;
@@ -243,43 +216,41 @@
       font-size: 0.75rem;
     }
     .promo button:hover { background: #2a2f3c; }
-    .cta {
-      margin-top: auto;
-      display: block;
-      text-align: center;
-      background: var(--accent);
-      color: #fff;
-      text-decoration: none;
-      font-weight: 700;
-      padding: 10px;
-      border-radius: 8px;
-      font-size: 0.9rem;
+    /* No "View deal" button any more: the image area (photo or dark square)
+       and the title are the links to the deal. */
+    .img-wrap a {
+      position: absolute;
+      inset: 0;
+      display: flex;
     }
-    .cta:hover { filter: brightness(1.12); }
+    /* Badges overlay the image link; let clicks pass through to the link. */
+    .img-wrap .badge-new,
+    .img-wrap .badge-discount,
+    .img-wrap .badge-cat {
+      pointer-events: none;
+    }
+    .img-wrap a:hover img { filter: brightness(1.08); }
+    .title a {
+      color: inherit;
+      text-decoration: none;
+    }
+    .title a:hover { text-decoration: underline; }
+    /* The last block (promo code, price history or price) sits at the bottom
+       of every card, so cards of different heights still line up. A card
+       without a price has the title as its only block — that one stays put
+       at the top. */
+    .body > :last-child:not(:first-child) { margin-top: auto; }
     .empty {
       color: var(--muted);
       text-align: center;
       padding: 64px 0;
       font-size: 1.05rem;
     }
-    .load-more-wrap {
-      display: flex;
-      justify-content: center;
-      padding: 26px 0 8px;
+    /* Infinite-scroll trigger: an empty full-width row at the end of the grid. */
+    #scroll-sentinel {
+      grid-column: 1 / -1;
+      height: 1px;
     }
-    #loadMoreBtn {
-      background: var(--accent);
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      padding: 12px 34px;
-      font-size: 0.95rem;
-      font-weight: 700;
-      font-family: inherit;
-      cursor: pointer;
-      min-width: 220px;
-    }
-    #loadMoreBtn:hover { filter: brightness(1.12); }
     footer {
       color: var(--muted);
       text-align: center;
@@ -318,7 +289,7 @@
 <header>
   <div class="header-left">
     <h1>&#127902; Coupon Codes</h1>
-    <span class="meta">9 deals &middot; updated November 28, 2026 at 12:59 AM UTC</span>
+    <span class="meta">10 deals &middot; updated November 28, 2026 at 02:19 AM UTC</span>
   </div>
   <div class="header-right">
     <nav class="site-nav">
@@ -340,35 +311,63 @@
   
   <div class="grid">
     
-    <article class="card" data-category="Other">
+    <article class="card" data-category="Electronics" data-source="slickdeals">
       <div class="img-wrap">
         <span class="badge-new">NEW</span>
+        
+        
+        <span class="badge-discount">&minus;48%</span>
+        
+        <span class="badge-cat">Electronics</span>
+        <a href="https://slickdeals.net/f/20412558-select-samsung-epp-edu-256gb-galaxy-s26-ultra-unlocked-smartphone-300-credit-580-more-free-s-h?utm_source=rss&amp;utm_content=fp&amp;utm_medium=RSS2" target="_blank" rel="noopener">
+          
+          <img src="https://slickdeals.net/attachment/3/0/2/2/8/9/3/1/450x450/22633908.thumb" alt="Select Samsung EPP/EDU: 256GB Galaxy S26 Ultra Unlocked Smartphone + $300 Credit $580 &amp; More + Free S&amp;H" loading="lazy" onerror="imgFallback(this)">
+          
+        </a>
+      </div>
+      <div class="body">
+        <div class="title"><a href="https://slickdeals.net/f/20412558-select-samsung-epp-edu-256gb-galaxy-s26-ultra-unlocked-smartphone-300-credit-580-more-free-s-h?utm_source=rss&amp;utm_content=fp&amp;utm_medium=RSS2" target="_blank" rel="noopener">Select Samsung EPP/EDU: 256GB Galaxy S26 Ultra Unlocked Smartphone + $300 Credit $580 &amp; More + Free S&amp;H</a></div>
+        
+        
+        <div class="prices">
+          <span class="price">$300.00</span>
+          
+          <span class="original">$580.00</span>
+          
+        </div>
+        
+        
+        <div class="promo">
+          <code>PAYPAL100</code>
+          <button type="button" data-code="PAYPAL100" onclick="copyCode(this)">Copy</button>
+        </div>
+        
+      </div>
+    </article>
+    
+    <article class="card" data-category="Other" data-source="1sale">
+      <div class="img-wrap">
+        <span class="badge-new">NEW</span>
+        
         
         <span class="badge-discount">&minus;84%</span>
         
         <span class="badge-cat">Other</span>
-        
-        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_15d47752c5fc831b19f65249f2f33ea9.jpg" alt="7% Glycolic Acid Exfoliating Toner 2Pack, Gently Exfoliates To Help Smooth and Brighten for More Even-Looking Skin Tone, 3.38 FL.OZ" loading="lazy" onerror="imgFallback(this)">
-        
+        <a href="https://www.amazon.com/dp/B0HC9FHSDD?tag=deal-finder-20" target="_blank" rel="noopener">
+          
+          <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_15d47752c5fc831b19f65249f2f33ea9.jpg" alt="7% Glycolic Acid Exfoliating Toner 2Pack, Gently Exfoliates To Help Smooth and Brighten for More Even-Looking Skin Tone, 3.38 FL.OZ" loading="lazy" onerror="imgFallback(this)">
+          
+        </a>
       </div>
       <div class="body">
-        <div class="title">7% Glycolic Acid Exfoliating Toner 2Pack, Gently Exfoliates To Help Smooth and Brighten for More Even-Looking Skin Tone, 3.38 FL.OZ</div>
+        <div class="title"><a href="https://www.amazon.com/dp/B0HC9FHSDD?tag=deal-finder-20" target="_blank" rel="noopener">7% Glycolic Acid Exfoliating Toner 2Pack, Gently Exfoliates To Help Smooth and Brighten for More Even-Looking Skin Tone, 3.38 FL.OZ</a></div>
+        
+        
         <div class="prices">
-          
           <span class="price">$6.99</span>
-          
           
           <span class="original">$43.99</span>
           
-          
-        </div>
-        
-        <div class="history-block">
-          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,10.6 L1.9,13.8 L3.7,1.1 L5.6,9.9 L7.4,2.1 L9.3,7.8 L11.1,2.9 L13.0,13.8 L14.8,9.4 L16.7,7.9 L18.5,7.4 L20.4,5.2 L22.2,25.6 L24.1,14.2 L25.9,13.6 L27.8,10.7 L29.6,12.5 L31.5,2.5 L33.3,2.3 L35.2,14.0 L37.0,1.3 L38.9,1.7 L40.7,1.0 L42.6,10.7 L44.4,2.6 L46.3,4.2 L48.1,13.4 L50.0,6.3 L51.9,5.2 L53.7,3.4 L55.6,7.2 L57.4,3.6 L59.3,14.5 L61.1,6.0 L63.0,10.5 L64.8,26.2 L66.7,7.0 L68.5,7.8 L70.4,12.3 L72.2,27.0 L74.1,9.5 L75.9,3.6 L77.8,5.7 L79.6,7.0 L81.5,12.8 L83.3,14.8 L85.2,7.4 L87.0,3.4 L88.9,6.8 L90.7,1.7 L92.6,9.1 L94.4,10.5 L96.3,14.6 L98.1,7.9 L100.0,7.9" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
-          <div class="history-meta">
-            <span>52-week history</span>
-            <span>Low: <span class="low">$4.14</span></span>
-          </div>
         </div>
         
         
@@ -377,39 +376,32 @@
           <button type="button" data-code="ZZXA53GX" onclick="copyCode(this)">Copy</button>
         </div>
         
-        <a class="cta" href="https://www.amazon.com/dp/B0HC9FHSDD?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
       </div>
     </article>
     
-    <article class="card" data-category="Home &amp; Kitchen">
+    <article class="card" data-category="Home &amp; Kitchen" data-source="1sale">
       <div class="img-wrap">
         <span class="badge-new">NEW</span>
+        
         
         <span class="badge-discount">&minus;70%</span>
         
         <span class="badge-cat">Home &amp; Kitchen</span>
-        
-        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_24ea8118fc027c9cbbaa4b86dca3eadb.jpg" alt="Lefant M210 OMNI Robot Vacuum and Mop, 20,000Pa Suction" loading="lazy" onerror="imgFallback(this)">
-        
+        <a href="https://www.amazon.com/dp/B0H7QWPWGH?tag=deal-finder-20" target="_blank" rel="noopener">
+          
+          <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_24ea8118fc027c9cbbaa4b86dca3eadb.jpg" alt="Lefant M210 OMNI Robot Vacuum and Mop, 20,000Pa Suction" loading="lazy" onerror="imgFallback(this)">
+          
+        </a>
       </div>
       <div class="body">
-        <div class="title">Lefant M210 OMNI Robot Vacuum and Mop, 20,000Pa Suction</div>
+        <div class="title"><a href="https://www.amazon.com/dp/B0H7QWPWGH?tag=deal-finder-20" target="_blank" rel="noopener">Lefant M210 OMNI Robot Vacuum and Mop, 20,000Pa Suction</a></div>
+        
+        
         <div class="prices">
-          
           <span class="price">$149.99</span>
-          
           
           <span class="original">$499.99</span>
           
-          
-        </div>
-        
-        <div class="history-block">
-          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,6.9 L1.9,9.0 L3.7,5.2 L5.6,6.0 L7.4,9.1 L9.3,13.6 L11.1,10.4 L13.0,1.0 L14.8,9.7 L16.7,6.5 L18.5,24.3 L20.4,14.6 L22.2,7.3 L24.1,3.3 L25.9,13.7 L27.8,8.5 L29.6,8.3 L31.5,10.7 L33.3,2.8 L35.2,7.0 L37.0,9.3 L38.9,3.7 L40.7,8.0 L42.6,14.5 L44.4,5.3 L46.3,10.1 L48.1,7.2 L50.0,9.5 L51.9,2.4 L53.7,13.2 L55.6,14.6 L57.4,11.7 L59.3,13.2 L61.1,5.8 L63.0,1.1 L64.8,14.4 L66.7,9.6 L68.5,2.4 L70.4,27.0 L72.2,13.4 L74.1,4.6 L75.9,5.4 L77.8,5.0 L79.6,6.5 L81.5,11.4 L83.3,14.3 L85.2,9.6 L87.0,3.1 L88.9,7.0 L90.7,2.4 L92.6,3.5 L94.4,12.8 L96.3,6.7 L98.1,7.8 L100.0,7.8" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
-          <div class="history-meta">
-            <span>52-week history</span>
-            <span>Low: <span class="low">$87.00</span></span>
-          </div>
         </div>
         
         
@@ -418,39 +410,32 @@
           <button type="button" data-code="LDC1ZSYR" onclick="copyCode(this)">Copy</button>
         </div>
         
-        <a class="cta" href="https://www.amazon.com/dp/B0H7QWPWGH?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
       </div>
     </article>
     
-    <article class="card" data-category="Fashion">
+    <article class="card" data-category="Fashion" data-source="1sale">
       <div class="img-wrap">
         <span class="badge-new">NEW</span>
+        
         
         <span class="badge-discount">&minus;68%</span>
         
         <span class="badge-cat">Fashion</span>
-        
-        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_763f2be76b663449d44e40b7da19f0b5.jpg" alt="Women Floral Scent Perfume Spray, Fluorescent Nectar Eau de Parfum for Dating &amp; Daily Use, 100ml" loading="lazy" onerror="imgFallback(this)">
-        
+        <a href="https://www.amazon.com/dp/B0H3PLW57P?tag=deal-finder-20" target="_blank" rel="noopener">
+          
+          <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_763f2be76b663449d44e40b7da19f0b5.jpg" alt="Women Floral Scent Perfume Spray, Fluorescent Nectar Eau de Parfum for Dating &amp; Daily Use, 100ml" loading="lazy" onerror="imgFallback(this)">
+          
+        </a>
       </div>
       <div class="body">
-        <div class="title">Women Floral Scent Perfume Spray, Fluorescent Nectar Eau de Parfum for Dating &amp; Daily Use, 100ml</div>
+        <div class="title"><a href="https://www.amazon.com/dp/B0H3PLW57P?tag=deal-finder-20" target="_blank" rel="noopener">Women Floral Scent Perfume Spray, Fluorescent Nectar Eau de Parfum for Dating &amp; Daily Use, 100ml</a></div>
+        
+        
         <div class="prices">
-          
           <span class="price">$8.99</span>
-          
           
           <span class="original">$27.89</span>
           
-          
-        </div>
-        
-        <div class="history-block">
-          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,13.7 L1.9,15.6 L3.7,10.7 L5.6,2.0 L7.4,15.5 L9.3,4.5 L11.1,3.9 L13.0,11.9 L14.8,9.5 L16.7,6.1 L18.5,6.1 L20.4,12.4 L22.2,11.8 L24.1,10.1 L25.9,15.6 L27.8,12.4 L29.6,15.1 L31.5,7.3 L33.3,15.3 L35.2,12.0 L37.0,10.9 L38.9,15.1 L40.7,3.9 L42.6,4.0 L44.4,4.6 L46.3,8.7 L48.1,6.3 L50.0,1.7 L51.9,13.0 L53.7,5.9 L55.6,7.4 L57.4,4.4 L59.3,5.7 L61.1,1.0 L63.0,15.8 L64.8,13.0 L66.7,7.8 L68.5,4.2 L70.4,8.2 L72.2,2.7 L74.1,10.3 L75.9,14.8 L77.8,15.0 L79.6,5.5 L81.5,3.9 L83.3,6.0 L85.2,15.0 L87.0,22.0 L88.9,8.1 L90.7,11.4 L92.6,10.2 L94.4,27.0 L96.3,6.4 L98.1,7.8 L100.0,7.8" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
-          <div class="history-meta">
-            <span>52-week history</span>
-            <span>Low: <span class="low">$5.77</span></span>
-          </div>
         </div>
         
         
@@ -459,39 +444,32 @@
           <button type="button" data-code="GLL2WKAB" onclick="copyCode(this)">Copy</button>
         </div>
         
-        <a class="cta" href="https://www.amazon.com/dp/B0H3PLW57P?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
       </div>
     </article>
     
-    <article class="card" data-category="Other">
+    <article class="card" data-category="Other" data-source="1sale">
       <div class="img-wrap">
         <span class="badge-new">NEW</span>
+        
         
         <span class="badge-discount">&minus;59%</span>
         
         <span class="badge-cat">Other</span>
-        
-        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_aa28518fab624790267b15f5b06b4357.jpg" alt="Essential Oils Set, 12 Scents, 10 ML Bottles, Lavender, Lemon, Rose, Jasmine, Vanilla, Sandalwood and More, for Humidifiers, Diffusers, Aromatherapy" loading="lazy" onerror="imgFallback(this)">
-        
+        <a href="https://www.amazon.com/dp/B0H15LQ2S2?tag=deal-finder-20" target="_blank" rel="noopener">
+          
+          <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_aa28518fab624790267b15f5b06b4357.jpg" alt="Essential Oils Set, 12 Scents, 10 ML Bottles, Lavender, Lemon, Rose, Jasmine, Vanilla, Sandalwood and More, for Humidifiers, Diffusers, Aromatherapy" loading="lazy" onerror="imgFallback(this)">
+          
+        </a>
       </div>
       <div class="body">
-        <div class="title">Essential Oils Set, 12 Scents, 10 ML Bottles, Lavender, Lemon, Rose, Jasmine, Vanilla, Sandalwood and More, for Humidifiers, Diffusers, Aromatherapy</div>
+        <div class="title"><a href="https://www.amazon.com/dp/B0H15LQ2S2?tag=deal-finder-20" target="_blank" rel="noopener">Essential Oils Set, 12 Scents, 10 ML Bottles, Lavender, Lemon, Rose, Jasmine, Vanilla, Sandalwood and More, for Humidifiers, Diffusers, Aromatherapy</a></div>
+        
+        
         <div class="prices">
-          
           <span class="price">$6.99</span>
-          
           
           <span class="original">$16.99</span>
           
-          
-        </div>
-        
-        <div class="history-block">
-          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,4.0 L1.9,1.0 L3.7,12.5 L5.6,3.5 L7.4,16.0 L9.3,4.5 L11.1,12.7 L13.0,2.0 L14.8,18.1 L16.7,10.0 L18.5,17.1 L20.4,15.8 L22.2,18.7 L24.1,5.4 L25.9,15.5 L27.8,9.0 L29.6,6.2 L31.5,5.3 L33.3,6.3 L35.2,18.3 L37.0,15.7 L38.9,1.3 L40.7,17.9 L42.6,1.6 L44.4,14.6 L46.3,3.9 L48.1,9.2 L50.0,4.2 L51.9,5.9 L53.7,13.8 L55.6,26.2 L57.4,14.4 L59.3,11.4 L61.1,17.7 L63.0,1.7 L64.8,9.9 L66.7,10.2 L68.5,7.5 L70.4,9.4 L72.2,8.0 L74.1,8.9 L75.9,11.1 L77.8,11.1 L79.6,15.3 L81.5,15.6 L83.3,5.6 L85.2,17.3 L87.0,12.7 L88.9,18.0 L90.7,8.2 L92.6,14.7 L94.4,27.0 L96.3,4.0 L98.1,9.9 L100.0,9.9" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
-          <div class="history-meta">
-            <span>52-week history</span>
-            <span>Low: <span class="low">$3.99</span></span>
-          </div>
         </div>
         
         
@@ -500,39 +478,32 @@
           <button type="button" data-code="BOQCL5G1" onclick="copyCode(this)">Copy</button>
         </div>
         
-        <a class="cta" href="https://www.amazon.com/dp/B0H15LQ2S2?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
       </div>
     </article>
     
-    <article class="card" data-category="Gaming">
+    <article class="card" data-category="Gaming" data-source="1sale">
       <div class="img-wrap">
         <span class="badge-new">NEW</span>
+        
         
         <span class="badge-discount">&minus;50%</span>
         
         <span class="badge-cat">Gaming</span>
-        
-        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_ee7827b1c28a5c8a94dfedd8abde861e-1.jpg" alt="32 Bit Handheld Game Console for Kids, 3.0&#34; IPS Screen Travel Toy" loading="lazy" onerror="imgFallback(this)">
-        
+        <a href="https://www.amazon.com/dp/B0HM7BDQMD?tag=deal-finder-20" target="_blank" rel="noopener">
+          
+          <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_ee7827b1c28a5c8a94dfedd8abde861e-1.jpg" alt="32 Bit Handheld Game Console for Kids, 3.0&#34; IPS Screen Travel Toy" loading="lazy" onerror="imgFallback(this)">
+          
+        </a>
       </div>
       <div class="body">
-        <div class="title">32 Bit Handheld Game Console for Kids, 3.0&#34; IPS Screen Travel Toy</div>
+        <div class="title"><a href="https://www.amazon.com/dp/B0HM7BDQMD?tag=deal-finder-20" target="_blank" rel="noopener">32 Bit Handheld Game Console for Kids, 3.0&#34; IPS Screen Travel Toy</a></div>
+        
+        
         <div class="prices">
-          
           <span class="price">$18.30</span>
-          
           
           <span class="original">$36.98</span>
           
-          
-        </div>
-        
-        <div class="history-block">
-          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,4.0 L1.9,1.0 L3.8,1.1 L5.8,11.1 L7.7,7.3 L9.6,5.2 L11.5,11.8 L13.5,8.8 L15.4,5.7 L17.3,4.5 L19.2,4.2 L21.2,3.2 L23.1,10.6 L25.0,10.4 L26.9,9.6 L28.8,12.0 L30.8,10.4 L32.7,12.8 L34.6,2.9 L36.5,4.6 L38.5,8.1 L40.4,1.4 L42.3,14.2 L44.2,3.3 L46.2,3.9 L48.1,13.5 L50.0,4.7 L51.9,5.3 L53.8,5.9 L55.8,8.8 L57.7,5.8 L59.6,3.7 L61.5,11.4 L63.5,9.4 L65.4,9.0 L67.3,13.4 L69.2,5.1 L71.2,27.0 L73.1,8.6 L75.0,5.7 L76.9,20.5 L78.8,6.5 L80.8,2.9 L82.7,12.4 L84.6,14.1 L86.5,8.7 L88.5,6.0 L90.4,12.3 L92.3,14.3 L94.2,7.1 L96.2,11.3 L98.1,11.4 L100.0,6.8" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
-          <div class="history-meta">
-            <span>52-week history</span>
-            <span>Low: <span class="low">$10.80</span></span>
-          </div>
         </div>
         
         
@@ -541,39 +512,32 @@
           <button type="button" data-code="V13G5JQP" onclick="copyCode(this)">Copy</button>
         </div>
         
-        <a class="cta" href="https://www.amazon.com/dp/B0HM7BDQMD?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
       </div>
     </article>
     
-    <article class="card" data-category="Other">
+    <article class="card" data-category="Other" data-source="1sale">
       <div class="img-wrap">
         <span class="badge-new">NEW</span>
+        
         
         <span class="badge-discount">&minus;50%</span>
         
         <span class="badge-cat">Other</span>
-        
-        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_ab502ea730c7138ebf16c18d42e73d13.jpg" alt="CURSOR FITNESS Twister Arm Trainer, 22-440LBS Hydraulic Arm Trainer" loading="lazy" onerror="imgFallback(this)">
-        
+        <a href="https://www.amazon.com/dp/B0H9L21PJJ?tag=deal-finder-20" target="_blank" rel="noopener">
+          
+          <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_ab502ea730c7138ebf16c18d42e73d13.jpg" alt="CURSOR FITNESS Twister Arm Trainer, 22-440LBS Hydraulic Arm Trainer" loading="lazy" onerror="imgFallback(this)">
+          
+        </a>
       </div>
       <div class="body">
-        <div class="title">CURSOR FITNESS Twister Arm Trainer, 22-440LBS Hydraulic Arm Trainer</div>
+        <div class="title"><a href="https://www.amazon.com/dp/B0H9L21PJJ?tag=deal-finder-20" target="_blank" rel="noopener">CURSOR FITNESS Twister Arm Trainer, 22-440LBS Hydraulic Arm Trainer</a></div>
+        
+        
         <div class="prices">
-          
           <span class="price">$24.99</span>
-          
           
           <span class="original">$49.99</span>
           
-          
-        </div>
-        
-        <div class="history-block">
-          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,5.6 L1.9,13.8 L3.7,10.4 L5.6,2.3 L7.4,8.8 L9.3,9.3 L11.1,1.8 L13.0,5.5 L14.8,14.0 L16.7,11.3 L18.5,1.9 L20.4,5.8 L22.2,11.1 L24.1,11.7 L25.9,4.0 L27.8,1.0 L29.6,6.6 L31.5,12.3 L33.3,3.3 L35.2,11.9 L37.0,2.4 L38.9,5.6 L40.7,3.5 L42.6,12.5 L44.4,4.1 L46.3,6.2 L48.1,13.8 L50.0,5.6 L51.9,2.3 L53.7,12.3 L55.6,4.8 L57.4,11.0 L59.3,6.8 L61.1,2.0 L63.0,13.1 L64.8,6.7 L66.7,2.9 L68.5,11.8 L70.4,2.9 L72.2,27.0 L74.1,12.1 L75.9,21.8 L77.8,7.9 L79.6,2.7 L81.5,12.2 L83.3,11.4 L85.2,13.4 L87.0,10.7 L88.9,9.6 L90.7,10.0 L92.6,10.6 L94.4,3.0 L96.3,6.7 L98.1,7.6 L100.0,7.6" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
-          <div class="history-meta">
-            <span>52-week history</span>
-            <span>Low: <span class="low">$14.16</span></span>
-          </div>
         </div>
         
         
@@ -582,39 +546,32 @@
           <button type="button" data-code="V6R9G1V1" onclick="copyCode(this)">Copy</button>
         </div>
         
-        <a class="cta" href="https://www.amazon.com/dp/B0H9L21PJJ?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
       </div>
     </article>
     
-    <article class="card" data-category="Other">
+    <article class="card" data-category="Other" data-source="1sale">
       <div class="img-wrap">
         <span class="badge-new">NEW</span>
+        
         
         <span class="badge-discount">&minus;40%</span>
         
         <span class="badge-cat">Other</span>
-        
-        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_f864c1aa9b55859c4db940c5adc3a7a2.jpg" alt="SKG FSA G7 Pro Fold Neck Massager for Strain Relief Deep Tissue" loading="lazy" onerror="imgFallback(this)">
-        
+        <a href="https://www.amazon.com/dp/B0CR5YHBVC?tag=deal-finder-20" target="_blank" rel="noopener">
+          
+          <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_f864c1aa9b55859c4db940c5adc3a7a2.jpg" alt="SKG FSA G7 Pro Fold Neck Massager for Strain Relief Deep Tissue" loading="lazy" onerror="imgFallback(this)">
+          
+        </a>
       </div>
       <div class="body">
-        <div class="title">SKG FSA G7 Pro Fold Neck Massager for Strain Relief Deep Tissue</div>
+        <div class="title"><a href="https://www.amazon.com/dp/B0CR5YHBVC?tag=deal-finder-20" target="_blank" rel="noopener">SKG FSA G7 Pro Fold Neck Massager for Strain Relief Deep Tissue</a></div>
+        
+        
         <div class="prices">
-          
           <span class="price">$89.99</span>
-          
           
           <span class="original">$149.99</span>
           
-          
-        </div>
-        
-        <div class="history-block">
-          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,1.5 L1.9,18.1 L3.7,17.4 L5.6,13.6 L7.4,5.4 L9.3,12.3 L11.1,1.0 L13.0,4.2 L14.8,11.4 L16.7,7.1 L18.5,1.8 L20.4,7.9 L22.2,9.2 L24.1,16.3 L25.9,15.5 L27.8,1.0 L29.6,9.5 L31.5,2.7 L33.3,11.0 L35.2,2.5 L37.0,8.2 L38.9,2.1 L40.7,11.8 L42.6,1.6 L44.4,7.7 L46.3,11.2 L48.1,1.0 L50.0,3.6 L51.9,11.0 L53.7,2.2 L55.6,4.4 L57.4,15.4 L59.3,15.7 L61.1,4.3 L63.0,10.1 L64.8,2.9 L66.7,3.4 L68.5,4.8 L70.4,11.1 L72.2,10.4 L74.1,13.1 L75.9,5.3 L77.8,11.7 L79.6,2.6 L81.5,13.9 L83.3,8.6 L85.2,1.8 L87.0,10.0 L88.9,12.9 L90.7,27.0 L92.6,14.0 L94.4,2.8 L96.3,14.2 L98.1,9.7 L100.0,9.7" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
-          <div class="history-meta">
-            <span>52-week history</span>
-            <span>Low: <span class="low">$54.47</span></span>
-          </div>
         </div>
         
         
@@ -623,39 +580,32 @@
           <button type="button" data-code="1SALEG7" onclick="copyCode(this)">Copy</button>
         </div>
         
-        <a class="cta" href="https://www.amazon.com/dp/B0CR5YHBVC?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
       </div>
     </article>
     
-    <article class="card" data-category="Electronics">
+    <article class="card" data-category="Electronics" data-source="1sale">
       <div class="img-wrap">
         <span class="badge-new">NEW</span>
+        
         
         <span class="badge-discount">&minus;36%</span>
         
         <span class="badge-cat">Electronics</span>
-        
-        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_6e7d2508c6a2636b389600ef37319a92.jpg" alt="12V Kids Electric Motorcycle, 2-Seater 3 Wheel Electric Scooter for Kids, Battery Powered Ride On Moped Toy with Dual Motors, MP3, Bluetooth, Toddler Scooter Motorcycle for Girls 3-6 (Rose)" loading="lazy" onerror="imgFallback(this)">
-        
+        <a href="https://www.amazon.com/dp/B0D93S9FXR?tag=deal-finder-20" target="_blank" rel="noopener">
+          
+          <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_6e7d2508c6a2636b389600ef37319a92.jpg" alt="12V Kids Electric Motorcycle, 2-Seater 3 Wheel Electric Scooter for Kids, Battery Powered Ride On Moped Toy with Dual Motors, MP3, Bluetooth, Toddler Scooter Motorcycle for Girls 3-6 (Rose)" loading="lazy" onerror="imgFallback(this)">
+          
+        </a>
       </div>
       <div class="body">
-        <div class="title">12V Kids Electric Motorcycle, 2-Seater 3 Wheel Electric Scooter for Kids, Battery Powered Ride On Moped Toy with Dual Motors, MP3, Bluetooth, Toddler Scooter Motorcycle for Girls 3-6 (Rose)</div>
+        <div class="title"><a href="https://www.amazon.com/dp/B0D93S9FXR?tag=deal-finder-20" target="_blank" rel="noopener">12V Kids Electric Motorcycle, 2-Seater 3 Wheel Electric Scooter for Kids, Battery Powered Ride On Moped Toy with Dual Motors, MP3, Bluetooth, Toddler Scooter Motorcycle for Girls 3-6 (Rose)</a></div>
+        
+        
         <div class="prices">
-          
           <span class="price">$76.99</span>
-          
           
           <span class="original">$119.99</span>
           
-          
-        </div>
-        
-        <div class="history-block">
-          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,11.1 L1.9,9.6 L3.7,11.5 L5.6,4.7 L7.4,2.6 L9.3,7.8 L11.1,5.1 L13.0,14.3 L14.8,8.7 L16.7,1.6 L18.5,14.0 L20.4,5.9 L22.2,2.8 L24.1,4.7 L25.9,27.0 L27.8,3.9 L29.6,10.0 L31.5,4.9 L33.3,3.2 L35.2,8.7 L37.0,5.7 L38.9,8.3 L40.7,4.5 L42.6,1.0 L44.4,13.0 L46.3,1.5 L48.1,9.2 L50.0,5.7 L51.9,2.3 L53.7,6.0 L55.6,8.8 L57.4,12.0 L59.3,4.5 L61.1,7.2 L63.0,6.0 L64.8,6.2 L66.7,6.7 L68.5,7.7 L70.4,2.5 L72.2,10.9 L74.1,5.2 L75.9,6.9 L77.8,4.0 L79.6,3.8 L81.5,9.6 L83.3,2.3 L85.2,1.2 L87.0,7.6 L88.9,14.1 L90.7,2.2 L92.6,13.3 L94.4,4.7 L96.3,7.7 L98.1,7.7 L100.0,7.7" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
-          <div class="history-meta">
-            <span>52-week history</span>
-            <span>Low: <span class="low">$43.38</span></span>
-          </div>
         </div>
         
         
@@ -664,39 +614,32 @@
           <button type="button" data-code="DE5G4O5Q" onclick="copyCode(this)">Copy</button>
         </div>
         
-        <a class="cta" href="https://www.amazon.com/dp/B0D93S9FXR?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
       </div>
     </article>
     
-    <article class="card" data-category="Other">
+    <article class="card" data-category="Other" data-source="1sale">
       <div class="img-wrap">
         <span class="badge-new">NEW</span>
+        
         
         <span class="badge-discount">&minus;33%</span>
         
         <span class="badge-cat">Other</span>
-        
-        <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_82d441b60338721b5c016ba9d42f1af7.jpg" alt="BOTSLAB 4 Channel 360° Dash Cam, 128GB Card, Voice Control, App Control" loading="lazy" onerror="imgFallback(this)">
-        
+        <a href="https://www.amazon.com/dp/B0F8W7CWHK?tag=deal-finder-20" target="_blank" rel="noopener">
+          
+          <img src="https://legacy.1sale.com/wp-content/uploads/2026/11/amazon_82d441b60338721b5c016ba9d42f1af7.jpg" alt="BOTSLAB 4 Channel 360° Dash Cam, 128GB Card, Voice Control, App Control" loading="lazy" onerror="imgFallback(this)">
+          
+        </a>
       </div>
       <div class="body">
-        <div class="title">BOTSLAB 4 Channel 360° Dash Cam, 128GB Card, Voice Control, App Control</div>
+        <div class="title"><a href="https://www.amazon.com/dp/B0F8W7CWHK?tag=deal-finder-20" target="_blank" rel="noopener">BOTSLAB 4 Channel 360° Dash Cam, 128GB Card, Voice Control, App Control</a></div>
+        
+        
         <div class="prices">
-          
           <span class="price">$180.49</span>
-          
           
           <span class="original">$269.99</span>
           
-          
-        </div>
-        
-        <div class="history-block">
-          <div class="sparkline"><svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="price history"><path d="M0.0,11.7 L1.9,14.7 L3.7,7.5 L5.6,1.3 L7.4,11.7 L9.3,2.5 L11.1,8.9 L13.0,12.3 L14.8,1.8 L16.7,6.2 L18.5,13.0 L20.4,7.6 L22.2,10.5 L24.1,4.5 L25.9,13.9 L27.8,14.3 L29.6,6.5 L31.5,8.8 L33.3,14.5 L35.2,9.2 L37.0,1.0 L38.9,4.9 L40.7,14.4 L42.6,9.5 L44.4,9.1 L46.3,11.3 L48.1,1.4 L50.0,2.0 L51.9,8.9 L53.7,4.3 L55.6,27.0 L57.4,13.5 L59.3,13.4 L61.1,8.9 L63.0,9.0 L64.8,1.9 L66.7,3.4 L68.5,4.1 L70.4,24.5 L72.2,6.5 L74.1,9.7 L75.9,11.9 L77.8,4.6 L79.6,11.7 L81.5,13.3 L83.3,11.6 L85.2,6.8 L87.0,12.2 L88.9,2.6 L90.7,5.3 L92.6,5.2 L94.4,13.7 L96.3,10.1 L98.1,7.9 L100.0,7.9" fill="none" stroke="#22c55e" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>
-          <div class="history-meta">
-            <span>52-week history</span>
-            <span>Low: <span class="low">$106.56</span></span>
-          </div>
         </div>
         
         
@@ -705,14 +648,11 @@
           <button type="button" data-code="UNUS7878" onclick="copyCode(this)">Copy</button>
         </div>
         
-        <a class="cta" href="https://www.amazon.com/dp/B0F8W7CWHK?tag=deal-finder-20" target="_blank" rel="noopener">View deal &rarr;</a>
       </div>
     </article>
     
     <div id="no-results" style="display:none; grid-column: 1/-1; text-align:center; padding: 40px; color: var(--muted);">No deals found matching your search.</div>
-  </div>
-  <div class="load-more-wrap">
-    <button type="button" id="loadMoreBtn" style="display:none;">Load More</button>
+    <div id="scroll-sentinel" aria-hidden="true"></div>
   </div>
   
 </main>
@@ -742,68 +682,86 @@
     });
   }
 
-  // Pagination: cards are revealed in batches of 24 via "Load More".
-  const CARDS_PER_PAGE = 24;
-  let currentlyVisible = CARDS_PER_PAGE;
-
+  // Infinite scroll: cards are revealed in batches of 24 as the scroll
+  // sentinel approaches the bottom of the window (no "Load More" button).
   // Client-side filtering: search text (case-insensitive title match) AND
   // the selected category must both match for a card to stay visible.
-  // Matching cards beyond `currentlyVisible` stay hidden until "Load More"
-  // is clicked; any filter change resets pagination to the first page.
-  // Escape clears the search text (category choice is kept).
-  // (Auto-refresh reloads the page, which also clears the filters.)
+  // Any filter change restarts from the first 24 matches; scrolling loads
+  // more of the filtered results. Escape clears the search text (category
+  // choice is kept). (Auto-refresh reloads the page, which also clears the
+  // filters.)
   (function () {
     var searchBar = document.getElementById('searchBar');
     var catFilter = document.getElementById('categoryFilter');
     var noResults = document.getElementById('no-results');
-    var loadMoreBtn = document.getElementById('loadMoreBtn');
+    var sentinel = document.getElementById('scroll-sentinel');
     var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
     if (!searchBar || !noResults || cards.length === 0) return;
 
-    function applyFilter(resetPagination) {
-      if (resetPagination) currentlyVisible = CARDS_PER_PAGE;
+    var CARDS_PER_BATCH = 24;
+    // Without an IntersectionObserver everything is shown at once.
+    var canBatch = !!(sentinel && 'IntersectionObserver' in window);
+    var matching = [];   // cards that pass the filters, in page order
+    var revealed = 0;    // how many of them are shown
+
+    function show(card) { card.style.display = 'flex'; }
+    function hide(card) { card.style.display = 'none'; }
+
+    // Same 100px lead-in as the observer's rootMargin.
+    function sentinelInView() {
+      return sentinel.getBoundingClientRect().top < window.innerHeight + 100;
+    }
+
+    // Show one batch (or everything when `all` is true). If the sentinel is
+    // still in view afterwards (short cards, tall window), keep going so the
+    // page never looks finished while matches remain hidden.
+    function revealMore(all) {
+      do {
+        var end = all ? matching.length : Math.min(revealed + CARDS_PER_BATCH, matching.length);
+        for (; revealed < end; revealed++) show(matching[revealed]);
+      } while (!all && revealed < matching.length && sentinelInView());
+    }
+
+    function applyFilter() {
+      // Start from a clean slate: every card hidden, then reveal matches.
+      cards.forEach(hide);
+      matching = [];
       var query = searchBar.value.trim().toLowerCase();
       var cat = catFilter ? catFilter.value : 'all';
-      var matched = 0;
       cards.forEach(function (card) {
         var title = card.querySelector('.title');
         var text = title ? title.textContent.toLowerCase() : '';
         var matchesCat = cat === 'all' || card.getAttribute('data-category') === cat;
         var matchesText = query === '' || text.indexOf(query) !== -1;
-        if (matchesCat && matchesText) {
-          matched++;
-          card.style.display = matched <= currentlyVisible ? 'flex' : 'none';
-        } else {
-          card.style.display = 'none';
-        }
+        if (matchesCat && matchesText) matching.push(card);
+        else hide(card);
       });
-      noResults.style.display = matched === 0 ? 'block' : 'none';
-      if (loadMoreBtn) {
-        loadMoreBtn.style.display = matched > currentlyVisible ? 'block' : 'none';
-      }
+      revealed = 0;
+      noResults.style.display = matching.length === 0 ? 'block' : 'none';
+      revealMore(!canBatch);
     }
 
-    if (loadMoreBtn) {
-      loadMoreBtn.addEventListener('click', function () {
-        currentlyVisible += CARDS_PER_PAGE;
-        applyFilter(false);
-      });
+    if (canBatch) {
+      new IntersectionObserver(function (entries) {
+        if (entries.some(function (entry) { return entry.isIntersecting; })) revealMore(false);
+      }, { rootMargin: '100px' }).observe(sentinel);
+      // The "Bottom" jump button reveals everything before it scrolls.
+      document.addEventListener('deals:reveal-all', function () { revealMore(true); });
     }
 
-    // Any filter interaction resets the view to the first 24 matches.
-    searchBar.addEventListener('input', function () { applyFilter(true); });
+    searchBar.addEventListener('input', applyFilter);
     if (catFilter) {
-      catFilter.addEventListener('change', function () { applyFilter(true); });
+      catFilter.addEventListener('change', applyFilter);
     }
     searchBar.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
         searchBar.value = '';
-        applyFilter(true);
+        applyFilter();
       }
     });
 
-    // Initial state: first 24 cards visible, button sized accordingly.
-    applyFilter(false);
+    // Initial state: first 24 cards visible.
+    applyFilter();
   })();
 
   // Jump-to-top / jump-to-bottom buttons. "Top" only appears once the
@@ -821,6 +779,9 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
     bottomBtn.addEventListener('click', function () {
+      // The list grows as it scrolls: reveal every matching card first, or
+      // the scroll would stop at a false bottom.
+      document.dispatchEvent(new CustomEvent('deals:reveal-all'));
       window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
     });
     window.addEventListener('scroll', toggleTop);
