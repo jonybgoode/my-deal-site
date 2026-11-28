@@ -18,6 +18,10 @@
       --accent: #3b82f6;
     }
     * { box-sizing: border-box; }
+    /* No scroll anchoring: when a filter resets the list while the page is
+       scrolled down, the browser would otherwise keep the scroll sentinel in
+       place and the whole list would be revealed at once. */
+    html { overflow-anchor: none; }
     body {
       margin: 0;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -184,37 +188,6 @@
       text-decoration: line-through;
       font-size: 0.9rem;
     }
-    .badge-atl {
-      background: var(--green-dark);
-      color: #7ee2a8;
-      border: 1px solid var(--green);
-      font-weight: 700;
-      font-size: 0.7rem;
-      letter-spacing: 0.04em;
-      padding: 2px 8px;
-      border-radius: 6px;
-      white-space: nowrap;
-    }
-    .history-block {
-      background: #0b0d11;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px 10px;
-    }
-    .history-block .sparkline svg {
-      display: block;
-      width: 100%;
-      height: 28px;
-    }
-    .history-meta {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      margin-top: 4px;
-      color: var(--muted);
-      font-size: 0.75rem;
-    }
-    .history-meta .low { color: #7ee2a8; font-weight: 600; }
     .promo {
       display: flex;
       align-items: center;
@@ -364,19 +337,6 @@
           {% if d.original_price and d.original_price > d.price %}
           <span class="original">${{ '%.2f' | format(d.original_price) }}</span>
           {% endif %}
-          {% if d.is_atl %}
-          <span class="badge-atl">All-Time Low</span>
-          {% endif %}
-        </div>
-        {% endif %}
-        {# A deal without a price (a coupon or cash-back post) has no price history to show. #}
-        {% if d.sparkline and d.price is not none %}
-        <div class="history-block">
-          <div class="sparkline">{{ d.sparkline | safe }}</div>
-          <div class="history-meta">
-            <span>52-week history</span>
-            <span>Low: <span class="low">${{ '%.2f' | format(d.all_time_low) }}</span></span>
-          </div>
         </div>
         {% endif %}
         {% if d.promo_code %}

@@ -13,14 +13,15 @@ Pipeline (one pass):
        (Playwright, budget-capped by MAX_SCRAPE).
     3. Store deals + every price check in SQLite.
     4. Score deals:  qualifies if discount >= 20% OR price is the all-time
-                     low (local price_history + backfilled Keepa-style
-                     external history for new deals).
+                     low in the local price_history (this pipeline's own
+                     sightings; no external history is backfilled).
                      score = discount_percent + (10 if all-time low else 0)
-                     only deals with score >= 15 make the page — except front-page (Slickdeals) deals,
-                      which always do.
+                     The score ranks duplicates and gates Telegram alerts. The pages
+                      publish every deal with a price (front page: always).
     5. Deduplicate across sources (rapidfuzz: title match >= 85 AND price
-       within 5%), then render qualifying deals to static HTML pages,
-       front-page deals first, then by discount, then newest —
+       within 5%), then render every published deal to static HTML pages:
+       front-page (Slickdeals) deals first, then the other discounted
+       deals by discount, then single-price deals, newest first —
        deals without a promo code -> deals.html, deals WITH one ->
        coupons.html. Both are the mandatory output of every run.
     6. Optional Telegram side-channel: if TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID
@@ -380,6 +381,118 @@ def extract_promo_code(text: str) -> Optional[str]:
     m = PROMO_CODE_RE.search(text or "")
     if m and any(c.isdigit() for c in m.group(1)):
         return m.group(1).upper()
+    return None
+
+
+# "Was" prices the Slickdeals front page states outright. Each pattern
+# names the price BEFORE a discount; labeled_reference_price() checks
+# every amount against the title price before it is believed.
+_AMOUNT = r"[$£€]\s?(\d{1,6}(?:,\d{3})*(?:\.\d{1,2})?)"
+# "was $59.99", "originally: $59.99"
+WAS_PRICE_RE = re.compile(r"\b(?:was|originally)\s*:?\s*" + _AMOUNT, re.IGNORECASE)
+# "$38.99 list price", "list price $38.99", "(40% off the $38.99 list price)"
+LIST_PRICE_RE = re.compile(
+    r"(?:(?P<pct>\d{1,2})\s*%\s*off\s+(?:the\s+)?)?"
+    r"(?:\blist price(?:\s+(?:of|was|is))?\s*(?P<amt>" + _AMOUNT + r")"
+    r"|(?P<amt2>" + _AMOUNT + r")\s+list price\b)",
+    re.IGNORECASE,
+)
+# "on sale for $5.30 - 40% off ...", "on sale for $154.99 - $75 (...) = $79.99"
+SALE_DROP_RE = re.compile(
+    r"\bon sale for\s+(?P<amt>" + _AMOUNT + r")\s*[-\u2013\u2212]\s*"
+    r"(?:(?P<pct>\d{1,2})\s*%\s*off\b|(?P<cut>" + _AMOUNT + r"))",
+    re.IGNORECASE,
+)
+SALE_RESULT_RE = re.compile(r"=\s*" + _AMOUNT)
+
+
+def _to_amount(raw: str) -> float:
+    # An amount reaches us with or without its currency sign, depending on
+    # which group of the pattern captured it.
+    return float(re.sub(r"[^\d.]", "", raw.replace(",", "")))
+
+
+def _amounts(text: str) -> list[float]:
+    return [_to_amount(m) for m in CURRENCY_RE.findall(text or "")]
+
+
+def _title_amounts(title: str) -> list[float]:
+    """Every amount a deal title states, shipping thresholds excluded."""
+    return _amounts(SHIPPING_THRESHOLD_RE.sub(" ", title or ""))
+
+
+def labeled_reference_price(title: str, description: str) -> Optional[float]:
+    """
+    The "was" price of a Slickdeals front-page deal, read from its
+    description — but only when the description states one outright:
+
+        "was $59.99" / "originally $59.99"
+        "$38.99 list price" / "40% off the $38.99 list price"
+        "on sale for $5.30 - 40% off ..."              (price before a coupon)
+        "on sale for $154.99 - $75 (with promo code X at checkout) = $79.99"
+
+    Everything else is prose and is ignored — including a bare
+    "on sale for $43.71", which is merely how the front page restates the
+    current price, "MSRP", and a percentage that comes without an amount.
+
+    Nothing is taken on trust. The title's first price is the deal's
+    price, so a stated amount must sit above it (5% to 5x), a stated
+    percentage must match the discount the amount implies (within 5
+    points), and an "X - Y = Z" chain must end at a price the title names.
+    That is what rejects a list price belonging to another size or to a
+    single unit ("$23.26 ... (40% off the $38.99 list price)" under a
+    "$15.95" title): believing it would invent a discount.
+
+    Returns the reference price, or None.
+    """
+    title_prices = _title_amounts(title)
+    if not title_prices or not description:
+        return None
+    price = title_prices[0]
+
+    text = TAG_RE.sub(" ", html.unescape(str(description)))  # no HTML
+    text = re.sub(r"[*_]+", " ", text)                      # no *emphasis*
+    text = re.sub(r"\s+", " ", text)
+
+    def sane(amount: float) -> bool:
+        return price * 1.05 <= amount <= price * 5
+
+    def pct_agrees(stated: Optional[str], amount: float) -> bool:
+        if stated is None:
+            return True
+        implied = (1 - price / amount) * 100
+        return abs(implied - float(stated)) <= 5
+
+    match = SALE_DROP_RE.search(text)
+    if match:
+        amount = _to_amount(match.group("amt"))
+        if sane(amount):
+            if match.group("pct") is not None:
+                if pct_agrees(match.group("pct"), amount):
+                    return amount
+            else:
+                # "$154.99 - $75 (...) = $79.99": the chain describes this
+                # deal only if it ends at a price the title names.
+                result = SALE_RESULT_RE.search(text, match.end(), match.end() + 100)
+                if result:
+                    final = _to_amount(result.group(1))
+                    ends_at_title_price = any(
+                        abs(final - stated) <= max(0.05, 0.02 * stated)
+                        for stated in title_prices
+                    )
+                    if ends_at_title_price and amount > final:
+                        return amount
+
+    for was in WAS_PRICE_RE.finditer(text):
+        amount = _to_amount(was.group(1))
+        if sane(amount):
+            return amount
+
+    for listed in LIST_PRICE_RE.finditer(text):
+        amount = _to_amount(listed.group("amt") or listed.group("amt2"))
+        if sane(amount) and pct_agrees(listed.group("pct"), amount):
+            return amount
+
     return None
 
 
@@ -795,8 +908,20 @@ def fetch_rss_source(
         price, original = extract_prices(
             SHIPPING_THRESHOLD_RE.sub(" ", title)
         )
+        summary = entry.get("summary", "")
+        if original is None and price is not None and name in ALWAYS_PUBLISH_SOURCES:
+            # Front-page descriptions are written by the deal's editor and
+            # sometimes say what the price used to be. Only an explicitly
+            # labelled "was" price counts (labeled_reference_price); the
+            # prose is never mined for numbers.
+            original = labeled_reference_price(title, summary)
+            if original is not None:
+                log.info(
+                    "Front-page deal states its 'was' price: %r -> $%.2f was $%.2f",
+                    title[:60], price, original,
+                )
         # Promo codes may sit in the title or in the description.
-        blob = f"{title} {entry.get('summary', '')}"
+        blob = f"{title} {summary}"
         items.append(
             {
                 "title": title,
@@ -1779,6 +1904,49 @@ def max_scrapes() -> int:
     return int(os.getenv("MAX_SCRAPE", "10"))
 
 
+def _title_states_price(price: Optional[float], title: str) -> bool:
+    """True when `price` equals one of the amounts the deal's title names
+    (within 2%): the Amazon page then describes this very offer."""
+    if price is None:
+        return False
+    return any(
+        abs(price - stated) <= max(0.05, 0.02 * stated)
+        for stated in _title_amounts(title)
+    )
+
+
+def _apply_scraped_prices(deal: Deal, data: dict, feed_original: Optional[float]) -> None:
+    """
+    Fold a successful Amazon scrape into a deal.
+
+    Every source but the front page: the live Amazon price becomes the
+    deal's price and Amazon's list price its "was" price (the "was" price
+    the source stated is kept when Amazon shows none).
+
+    Front page (Slickdeals): the price in the title IS the deal — often a
+    coupon or promo-code price that Amazon's own page does not reflect —
+    so it stays. The scrape may only supply the list price, and only when
+    Amazon's price matches a price the title names. Otherwise the page is
+    about another size or variant, and its list price would say nothing
+    about this deal ("15-lb $15.95" beside the 25-lb pair's list price).
+    """
+    list_price = data.get("original_price")
+    if _is_trusted_deal(deal) and deal.price is not None:
+        if list_price and _title_states_price(data.get("price"), deal.title):
+            deal.original_price = list_price
+        elif list_price:
+            log.info(
+                "Front-page deal keeps its title prices ($%.2f, was %s); "
+                "Amazon's list price $%.2f ignored: Amazon sells it at $%.2f",
+                deal.price,
+                f"${deal.original_price:.2f}" if deal.original_price else "n/a",
+                list_price, data.get("price") or 0.0,
+            )
+        return
+    deal.price = data["price"]
+    deal.original_price = list_price or feed_original
+
+
 def enrich_deal(deal: Deal, scrape: bool = False) -> Deal:
     """
     Enrich a deal with canonical image, URL, and price data. Called right
@@ -1802,7 +1970,12 @@ def enrich_deal(deal: Deal, scrape: bool = False) -> Deal:
         price off the live product page (budget-capped at MAX_SCRAPE per
         run). A scrape refines a deal, it never strips it: when the live
         page shows no list price, the "was" price the source stated is
-        kept. Any failure (captcha, timeout, no price found) logs a
+        kept. Front-page deals are the exception: their title price is
+        the deal (often a coupon or promo-code price Amazon's own page
+        does not reflect), so it stays and the scrape may only add
+        Amazon's list price — and only when Amazon's price matches one
+        the title names (see _apply_scraped_prices).
+        Any failure (captcha, timeout, no price found) logs a
         WARNING and the deal simply keeps its source prices.
       - A deal without any price stays without one. Honest data beats a
         fake discount.
@@ -1855,15 +2028,14 @@ def enrich_deal(deal: Deal, scrape: bool = False) -> Deal:
             _SCRAPE_STATE["used"] += 1
             try:
                 data = scrape_amazon_price(deal.url)
-                deal.price = data["price"]
-                deal.original_price = data["original_price"] or feed_original
+                _apply_scraped_prices(deal, data, feed_original)
                 if not deal.title.strip() and data.get("title"):
                     deal.title = data["title"]
                 _SCRAPE_STATE["ok"] += 1
                 log.info(
                     "Amazon scrape OK %s: price $%.2f (list %s)",
-                    asin_match.group(1), data["price"],
-                    f"${data['original_price']:.2f}" if data["original_price"] else "n/a",
+                    asin_match.group(1), deal.price,
+                    f"${deal.original_price:.2f}" if deal.original_price else "n/a",
                 )
                 scraped = True
             except AmazonBlockedError as exc:
@@ -1888,15 +2060,14 @@ def enrich_deal(deal: Deal, scrape: bool = False) -> Deal:
                     data = scrape_amazon_price(click_hop=click_hop)
                     deal.url = data["resolved_url"] or deal.url
                     deal.merchant = "amazon"
-                    deal.price = data["price"]
-                    deal.original_price = data["original_price"] or feed_original
+                    _apply_scraped_prices(deal, data, feed_original)
                     if not deal.title.strip() and data.get("title"):
                         deal.title = data["title"]
                     _SCRAPE_STATE["ok"] += 1
                     log.info(
                         "Amazon scrape OK via click hop: %s price $%.2f (list %s)",
-                        deal.url, data["price"],
-                        f"${data['original_price']:.2f}" if data["original_price"] else "n/a",
+                        deal.url, deal.price,
+                        f"${deal.original_price:.2f}" if deal.original_price else "n/a",
                     )
                     scraped = True
                 except AmazonBlockedError as exc:
@@ -1940,24 +2111,27 @@ def score_deal(conn: sqlite3.Connection, deal: Deal) -> tuple[float, bool]:
 
     Qualifies when:
       - discount >= 20% OR
-      - current price is the ALL-TIME low (full price_history — local
-        observations plus any backfilled external history).
+      - current price is the ALL-TIME low in the local price_history —
+        this pipeline's own sightings only (no external history is
+        backfilled), and only from the second sighting on: a price seen
+        for the first time is trivially its own lowest.
 
     score = discount_percent + (10 if all-time low else 0)
 
-    Note: with a year of backfilled history, matching the all-time low is
-    rare and meaningful; the score >= 15 filter (pipeline) keeps weak
-    first sightings quiet.
+    Note: the pages publish every deal that states a price (is_published);
+    the score ranks duplicates and gates the Telegram alerts.
     """
     if deal.price is None or deal.id is None:
         return 0.0, False
 
     row = conn.execute(
-        "SELECT MIN(price) FROM price_history WHERE deal_id = ?",
+        "SELECT MIN(price), COUNT(*) FROM price_history WHERE deal_id = ?",
         (deal.id,),
     ).fetchone()
 
-    all_time_low = row[0] is not None and deal.price <= row[0] + 1e-9
+    all_time_low = (
+        row[0] is not None and row[1] >= 2 and deal.price <= row[0] + 1e-9
+    )
     qualifies = deal.discount_percent >= 20 or all_time_low
     score = round(deal.discount_percent + (10 if all_time_low else 0), 1)
     return score, qualifies
@@ -2117,12 +2291,23 @@ def _is_trusted_deal(deal: Deal) -> bool:
     return deal.source in ALWAYS_PUBLISH_SOURCES
 
 
+def is_published(deal: Deal) -> bool:
+    """
+    Whether a deal goes on the site: every deal that states a price —
+    discounted or not — plus every front-page deal, even a price-less
+    coupon post. Only a deal from another source that states no price at
+    all is left out (a title alone is not a listing).
+    """
+    return deal.price is not None or _is_trusted_deal(deal)
+
+
 def deduplicate_deals(deals: list[Deal]) -> list[Deal]:
     """
     Collapse cross-source duplicates: normalized-title token_set_ratio >= 85
     AND prices within 5% -> keep ONE per cluster. Ranked first by "comes from
     an always-published source" (front page: curated, always shown first), then by "has an
-    Amazon link" (deepest price history), then by pipeline score.
+    Amazon link" (a canonical product page that carries the affiliate
+    tag), then by pipeline score.
 
     Two always-published deals are the same deal only when their titles are
     near-identical (token_sort_ratio >= 90) on top of the rule above: the
@@ -2170,8 +2355,9 @@ def deduplicate_deals(deals: list[Deal]) -> list[Deal]:
         else:
             removed += 1
             log.info(
-                "Dedup: dropped %r [%s] (duplicate of %r [%s])",
-                cand.title[:50], cand.source, dup_of.title[:50], dup_of.source,
+                "Dedup: dropped %r [%s] -%s%% (duplicate of %r [%s] -%s%%)",
+                cand.title[:50], cand.source, cand.discount_percent,
+                dup_of.title[:50], dup_of.source, dup_of.discount_percent,
             )
     log.info(
         "Deduplicated: %d -> %d deals (%d cross-source duplicates removed)",
@@ -2187,7 +2373,6 @@ def render_html(
     deals: list[Deal],
     out_path: Path,
     new_window: timedelta = timedelta(hours=24),
-    conn: Optional[sqlite3.Connection] = None,
     template_name: str = "deals.html",
 ) -> int:
     """
@@ -2196,8 +2381,9 @@ def render_html(
     even an empty qualifying list still produces an (empty-state) page so
     the auto-reload loop stays meaningful.
 
-    With a DB connection each card also gets its price-history extras:
-    the all-time low, a sparkline SVG, and the All-Time-Low badge flag.
+    No price-history extras are rendered: the only history this pipeline
+    has is its own sightings, and the mock "52-week history" that used to
+    sit on every card was invented. It comes back with a real provider.
     """
     now = datetime.now(timezone.utc)
     rows: list[dict] = []
@@ -2212,18 +2398,6 @@ def render_html(
         except (TypeError, ValueError):
             is_new = False
 
-        # All-time stats + sparkline from the full price history.
-        sparkline, all_time_low, is_atl = "", None, False
-        if conn is not None and deal.id is not None:
-            points = get_price_history(conn, deal.id)
-            if len(points) >= 2:
-                all_time_low = min(p for _, p in points)
-                sparkline = generate_sparkline(points)
-                is_atl = (
-                    deal.price is not None
-                    and deal.price <= all_time_low + 1e-9
-                )
-
         rows.append(
             {
                 "title": deal.title,
@@ -2235,9 +2409,6 @@ def render_html(
                 "promo_code": deal.promo_code,
                 "image_url": deal.image_url,
                 "is_new": is_new,
-                "all_time_low": all_time_low,
-                "sparkline": sparkline,
-                "is_atl": is_atl,
                 "category": deal.category,
                 "source": deal.source,
                 "found_at": deal.found_at,
@@ -2245,8 +2416,15 @@ def render_html(
         )
 
     # Page order: the front page first (Slickdeals deals are hand-curated
-    # and must never be buried), then the biggest discount, then the
-    # newest. Ties keep the pipeline's own order (stable sort).
+    # and must never be buried), then the other discounted deals by the
+    # biggest discount, then the single-price deals, newest first. Ties
+    # keep the pipeline's own order (stable sort).
+    def _page_group(row: dict) -> int:
+        # 2 = a single price with no badge: the discount rounds to < 1%.
+        if row["source"] in ALWAYS_PUBLISH_SOURCES:
+            return 0
+        return 1 if round(row["discount_percent"] or 0) >= 1 else 2
+
     def _found_timestamp(found_at: str) -> float:
         try:
             found = datetime.fromisoformat(found_at)
@@ -2258,7 +2436,7 @@ def render_html(
 
     rows.sort(
         key=lambda r: (
-            0 if r["source"] in ALWAYS_PUBLISH_SOURCES else 1,
+            _page_group(r),
             -(r["discount_percent"] or 0),
             -_found_timestamp(r["found_at"]),
         )
@@ -2294,9 +2472,21 @@ def prune_old_deals(conn: sqlite3.Connection, days: int = 14) -> int:
             datetime.now(timezone.utc) - timedelta(days=days)
         ).isoformat(timespec="seconds")
         cur = conn.execute("DELETE FROM deals WHERE found_at < ?", (cutoff,))
+        pruned = cur.rowcount
+        # Price observations of a deleted deal are dead weight (they once
+        # piled up into tens of megabytes).
+        conn.execute(
+            "DELETE FROM price_history WHERE deal_id NOT IN (SELECT id FROM deals)"
+        )
+        # Rows written by the retired mock history are dated before the
+        # deal was first sighted; a real observation never is.
+        conn.execute(
+            "DELETE FROM price_history WHERE checked_at < "
+            "(SELECT found_at FROM deals WHERE deals.id = price_history.deal_id)"
+        )
         conn.commit()
-        log.info("Pruned %d deals older than %d days", cur.rowcount, days)
-        return cur.rowcount
+        log.info("Pruned %d deals older than %d days", pruned, days)
+        return pruned
     except Exception:
         log.exception("Prune of old deals failed")
         return 0
@@ -2368,20 +2558,21 @@ def run_pipeline(dry_run: bool = False, scrape: bool = False) -> Optional[Path]:
             _SCRAPE_STATE["used"], max_scrapes(),
         )
 
-    # The HTML page is the user's browsable catalog: it ALWAYS renders all
-    # currently-qualifying deals (qualifies AND score >= 15), plus every
-    # deal from the always-published sources. last_alert_price
-    # does NOT filter the page — it only gates the Telegram side-channel and
-    # any future "NEW since last run" logic.
+    # The HTML page is the user's browsable catalog: it renders every deal
+    # that states a price — discounted or not — plus every front-page
+    # deal (see is_published). last_alert_price does NOT filter the page —
+    # it only gates the Telegram side-channel and any future "NEW since
+    # last run" logic.
     qualifying: list[tuple[Deal, float]] = []
     for deal in deals:
         store_deal(conn, deal)
-        backfill_external_history(conn, deal)  # year of history for new deals
-        score, qualifies = score_deal(conn, deal)
-        deal.score = score  # feeds the dedup ranking below
-        # Front-page deals are published whatever they score; everything
-        # else needs a real discount (or an all-time low).
-        if (qualifies and score >= 15) or deal.source in ALWAYS_PUBLISH_SOURCES:
+        # No external price history is backfilled. What used to be written
+        # here was an invented year of prices, and invented numbers belong
+        # neither on the site nor in the alerts. The history helpers above
+        # stay for the day a real provider (Keepa, ...) is connected.
+        score, _qualifies = score_deal(conn, deal)
+        deal.score = score  # ranks duplicates below; gates Telegram alerts
+        if is_published(deal):
             qualifying.append((deal, score))
 
     # Cross-source duplicates collapse BEFORE rendering / alerting.
@@ -2399,8 +2590,8 @@ def run_pipeline(dry_run: bool = False, scrape: bool = False) -> Optional[Path]:
         log.info("No qualifying deals this run")
     # Always render — even an empty catalog keeps the pages' 30-minute
     # auto-reload loop meaningful.
-    render_html(main_deals, deals_page, conn=conn, template_name="deals.html")
-    render_html(coupon_deals, coupons_page, conn=conn, template_name="coupons.html")
+    render_html(main_deals, deals_page, template_name="deals.html")
+    render_html(coupon_deals, coupons_page, template_name="coupons.html")
 
     if not dry_run:
         # --- Optional Telegram side-channel: best-of-the-best only. ---

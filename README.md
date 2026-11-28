@@ -33,7 +33,7 @@ normalize_deal() ─> enrich_deal() ─> store_deal() ─> score_deal()
 
 | Source | Kind | Notes |
 |---|---|---|
-| Slickdeals | RSS | **Front page** (all stores). The feed holds only its newest ~25 items and has no paging; every item is read (no per-feed cap) and is **always published**, whatever it scores |
+| Slickdeals | RSS | **Front page** (all stores). The feed holds only its newest ~25 items and has no paging; every item is read (no per-feed cap) and is **always published**, whatever it scores. A "was" price is taken from the description only when it is explicitly labelled ("was $59.99", "on sale for $5.30 - 40% off", "$38.99 list price") and consistent with the title price |
 | eDealInfo | RSS (cloudscraper) | Cloudflare bypass attempt via cloudscraper; Turnstile challenges still fail → `Cloudflare bypass failed` WARNING |
 | MusiciansFriend | Playwright + stealth | Stupid Deal of the Day; Akamai serves a ~20-byte bot stub — waits for deal selectors, WARNINGs `Akamai bypass failed` when blocked |
 | BensBargains | RSS | |
@@ -56,29 +56,41 @@ bot walls; the WARNINGs in the log are your diagnostic.
 
 **Scoring rules**
 
-- A deal *qualifies* if: discount >= 20% **OR** current price is the
-  **all-time low** (local `price_history` + backfilled 52-week history).
-- `score = discount_percent + (10 if all-time low else 0)`
-- The HTML pages always render **all** currently-qualifying deals
-  (score >= 15) — they are your browsable catalog and are not filtered by
-  `last_alert_price`. That column only gates the optional Telegram
-  side-channel (and any future "NEW since last run" logic).
+- **Every deal that states a price is published** — discounted or not
+  (`is_published`). Only a deal from another source that states no price
+  at all is left out. The pages are your browsable catalog and are not
+  filtered by `last_alert_price`; that column only gates the optional
+  Telegram side-channel (and any future "NEW since last run" logic).
+- A deal *qualifies* (for ranking and Telegram) if: discount >= 20%
+  **OR** current price is the **all-time low** in the local
+  `price_history` — this pipeline's own sightings, from the second
+  sighting on. No external history is backfilled and no price-history
+  block is rendered: the "52-week history" that used to sit on every
+  card was mock data and is gone until a real provider (e.g. Keepa) is
+  connected.
 - **Prices are never invented:** a deal shows the prices its source
   stated, or no price at all. For RSS feeds those are the prices in the
   **title** — descriptions are prose and are not mined, so promo posts no
-  longer turn into nonsense prices. A price without a "was" price has no
+  longer turn into nonsense prices. One exception: a Slickdeals front-page
+  deal takes a "was" price from its description only when it is
+  explicitly labelled ("was $59.99", "on sale for $5.30 - 40% off",
+  "$38.99 list price") and consistent with the title price
+  (`labeled_reference_price`). A price without a "was" price has no
   discount (`original_price` None, `discount_percent` 0), and a deal
   without a price renders just the image and the title.
 - **Front-page exception:** Slickdeals front-page deals
   (`ALWAYS_PUBLISH_SOURCES`) are always published, whatever they score —
   so a front-page deal with a single price, or none at all, still appears.
-- **Page order:** front-page (Slickdeals) deals first; then every other
-  deal by discount, biggest first; then the newest first.
+- **Page order:** front-page (Slickdeals) deals first (by discount, then
+  newest); then the other **discounted** deals, biggest discount first;
+  then the **single-price** deals, newest first. Single-price deals carry
+  no discount badge.
 - After scoring, cross-source duplicates collapse: normalized-title
   match >= 85 (rapidfuzz `token_set_ratio`) **and** prices within 5%
   keep one deal per cluster — preferring front-page (Slickdeals) rows so
   no front-page deal is ever merged into another source's card, then
-  Amazon-linked rows (deepest price history), then the highest score.
+  Amazon-linked rows (a canonical product page that carries the
+  affiliate tag), then the highest score.
   Two front-page deals only count as duplicates when their titles are
   near-identical (`token_sort_ratio` >= 90), so e.g. a women's and a
   men's version of the same shoe both stay.
@@ -179,7 +191,10 @@ raw Amazon product href in the landing page HTML rewrites `deal.url`
 directly (always on — even without `--scrape`); otherwise, with
 `--scrape`, the deal's `slickdeals.net/click?...` hop is followed in a
 real browser until it lands on the Amazon product page, and the real
-current/list prices are scraped in the same visit. Non-Amazon targets
+current/list prices are scraped in the same visit. Front-page deals
+keep the price their title states (often a coupon price Amazon's page
+does not show): there the scrape only supplies the list price, and only
+when Amazon's price matches one the title names. Non-Amazon targets
 (e.g. Woot) are detected and left untouched. Resolved CTAs get the
 affiliate tag automatically at render time. Real PA-API access, once
 approved, replaces the scraper without changing the call site
@@ -259,7 +274,7 @@ Python 3.10 + Playwright Chromium, runs `python deal_finder.py --once
 --scrape`, and publishes the rendered `index.html` + `coupons.html` to the
 `gh-pages` branch via `peaceiris/actions-gh-pages` (only the final HTML is
 pushed — the Jinja templates are fully rendered into those files). A cached
-`deals.db` carries NEW badges and price history across runs.
+`deals.db` carries NEW badges and this pipeline's own price sightings across runs.
 
 You can manually trigger a run by going to the "Actions" tab in the GitHub
 repository, selecting "Auto-Update Deals", and clicking "Run workflow".
@@ -349,10 +364,10 @@ Terms of Service and robots.txt.
 - **"RSS feed ... returned 0 entries"** — the feed URL is dead, redirects
   to an HTML page, or serves malformed XML. Open the URL in a browser and
   look for an XML icon/feed link; sites often move their feed.
-- **No qualifying deals:** a deal only qualifies on a real discount — one
-  its source states (>= 20%), or an all-time low in `price_history`.
-  Prices are never invented, so a quiet feed can legitimately leave just
-  the Slickdeals front page on the site.
+- **Deals missing from the page:** every deal that states a price is
+  published. A deal is skipped only when it states no price at all (other
+  than Slickdeals front-page posts) or when it is a duplicate of a deal
+  already listed; the `Dedup: dropped` log lines name those.
 - **Telegram never sends:** it's opt-in now (see above) and only carries
   score >= 40 deals; also confirm the bot is a channel admin.
 - **Playwright missing:** install it (`pip install playwright`) or leave
